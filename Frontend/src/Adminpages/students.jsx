@@ -1,0 +1,535 @@
+import React, { useState } from 'react';
+import '../../css/students.css';
+
+const initialStudents = [
+  { id: 1, name: 'Juan Dela Cruz', lrn: '2023-001234', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-05-18', gender: 'Male', address: '123 Pine St', parent: 'Ana Dela Cruz', contact: '0917-123-4567', password: 'jd12345' },
+  { id: 2, name: 'Maria Garcia', lrn: '2023-001235', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-07-09', gender: 'Female', address: '45 Oak St', parent: 'Luis Garcia', contact: '0917-234-5678', password: 'mg2023!' },
+  { id: 3, name: 'Jose Reyes', lrn: '2023-001236', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-11-02', gender: 'Male', address: '78 Elm St', parent: 'Gloria Reyes', contact: '0917-345-6789', password: 'jrstudent' },
+  { id: 4, name: 'Ana Santos', lrn: '2023-001237', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-03-22', gender: 'Female', address: '90 Maple St', parent: 'Rogelio Santos', contact: '0917-456-7890', password: 'aspass123' },
+  { id: 5, name: 'Carlos Mendoza', lrn: '2023-001238', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-09-14', gender: 'Male', address: '12 Birch St', parent: 'May Mendoza', contact: '0917-567-8901', password: 'cmportal' },
+  { id: 6, name: 'Elena Rodriguez', lrn: '2023-001239', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-08-01', gender: 'Female', address: '24 Cedar St', parent: 'Jose Rodriguez', contact: '0917-678-9012', password: 'erpass!23' },
+  { id: 7, name: 'Miguel Tan', lrn: '2023-001240', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-04-11', gender: 'Male', address: '56 Walnut St', parent: 'Lina Tan', contact: '0917-789-0123', password: 'mt2023' },
+  { id: 8, name: 'Sofia Lim', lrn: '2023-001241', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-10-27', gender: 'Female', address: '34 Cherry St', parent: 'Ellen Lim', contact: '0917-890-1234', password: 'slportal' },
+];
+
+const Students = () => {
+  const [students, setStudents] = useState(initialStudents);
+  const [showModal, setShowModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    lrn: '',
+    grade: 'Grade 3',
+    class: 'Class A',
+    status: 'Active',
+    dob: '',
+    gender: '',
+    address: '',
+    parent: '',
+    contact: '',
+    password: '',
+  });
+
+  const openAddModal = () => {
+    setEditingStudent(null);
+    setFormData({
+      name: '',
+      lrn: '',
+      grade: 'Grade 3',
+      class: 'Class A',
+      status: 'Active',
+      dob: '',
+      gender: '',
+      address: '',
+      parent: '',
+      contact: '',
+      password: '',
+    });
+    setShowModal(true);
+  };
+
+  const openEditModal = (student) => {
+    setEditingStudent(student.id);
+    setFormData({
+      name: student.name,
+      lrn: student.lrn,
+      grade: student.grade,
+      class: student.class,
+      status: student.status,
+      dob: student.dob || '',
+      gender: student.gender || '',
+      address: student.address || '',
+      parent: student.parent || '',
+      contact: student.contact || '',
+      password: student.password || '',
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingStudent(null);
+    setShowEditPassword(false);
+  };
+
+  const handleFormChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSaveStudent = (event) => {
+    event.preventDefault();
+
+    if (editingStudent) {
+      setStudents((prev) =>
+        prev.map((student) =>
+          student.id === editingStudent ? { ...student, ...formData } : student
+        )
+      );
+    } else {
+      setStudents((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          ...formData,
+          password: formData.password || 'default123',
+        },
+      ]);
+    }
+
+    closeModal();
+  };
+
+  const handleDeleteStudent = (id) => {
+    if (window.confirm('Delete this student?')) {
+      setStudents((prev) => prev.filter((student) => student.id !== id));
+    }
+  };
+
+  const openViewModal = (student) => {
+    setViewingStudent(student);
+    setShowViewModal(true);
+  };
+
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setViewingStudent(null);
+    setShowPassword(false);
+  };
+
+  const totalStudents = students.length;
+  const activeStudents = students.filter((student) => student.status === 'Active').length;
+  const inactiveStudents = totalStudents - activeStudents;
+
+  return (
+    <div className="students-page">
+      <div className="page-header">
+        <h1>Students Management</h1>
+        <button className="btn-primary" onClick={openAddModal}>
+          + Add New Student
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="stats-row">
+        <div className="stat-card-small">
+          <div className="stat-icon-small blue">👨‍🎓</div>
+          <div className="stat-info-small">
+            <h3>Total Students</h3>
+            <p className="stat-number-small">{totalStudents}</p>
+          </div>
+        </div>
+        <div className="stat-card-small">
+          <div className="stat-icon-small green">✅</div>
+          <div className="stat-info-small">
+            <h3>Active</h3>
+            <p className="stat-number-small">{activeStudents}</p>
+          </div>
+        </div>
+        <div className="stat-card-small">
+          <div className="stat-icon-small orange">⏸️</div>
+          <div className="stat-info-small">
+            <h3>Inactive</h3>
+            <p className="stat-number-small">{inactiveStudents}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Section */}
+      <div className="filter-section">
+        <div className="filter-group">
+          <label>Grade Level:</label>
+          <select name="grade" value={formData.grade} onChange={handleFormChange}>
+            <option>All Grades</option>
+            <option>Grade 1</option>
+            <option>Grade 2</option>
+            <option>Grade 3</option>
+            <option>Grade 4</option>
+            <option>Grade 5</option>
+            <option>Grade 6</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Class:</label>
+          <select name="class" value={formData.class} onChange={handleFormChange}>
+            <option>All Classes</option>
+            <option>Class A</option>
+            <option>Class B</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Status:</label>
+          <select name="status" value={formData.status} onChange={handleFormChange}>
+            <option>All Status</option>
+            <option>Active</option>
+            <option>Inactive</option>
+          </select>
+        </div>
+        <div className="search-box">
+          <input type="text" placeholder="Search student..." />
+          <span className="search-icon">🔍</span>
+        </div>
+      </div>
+
+      {/* Students Table */}
+      <div className="students-table-container">
+        <table className="students-table">
+          <thead>
+            <tr>
+              <th>Student Name</th>
+              <th>LRN</th>
+              <th>Grade Level</th>
+              <th>Class</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((student) => (
+              <tr key={student.id}>
+                <td>
+                  <div className="student-cell">
+                    <div className="student-avatar-small">
+                      {student.name.split(' ').map((n) => n[0]).join('')}
+                    </div>
+                    <span className="student-name">{student.name}</span>
+                  </div>
+                </td>
+                <td>{student.lrn}</td>
+                <td>{student.grade}</td>
+                <td>
+                  <span className={`class-badge-small ${student.class === 'Class A' ? 'class-a' : 'class-b'}`}>
+                    {student.class}
+                  </span>
+                </td>
+                <td>
+                  <span className={`status-badge ${student.status === 'Active' ? 'active' : 'inactive'}`}>
+                    {student.status}
+                  </span>
+                </td>
+                <td>
+                  <div className="action-buttons">
+                    <button className="btn-icon" title="View" onClick={() => openViewModal(student)}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
+                    </button>
+                    <button className="btn-icon" title="Edit" onClick={() => openEditModal(student)}>
+                      ✏️
+                    </button>
+                    <button className="btn-icon" title="Delete" onClick={() => handleDeleteStudent(student.id)}>
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add/Edit Student Modal */}
+      {showModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>{editingStudent ? 'Edit Student' : 'Add New Student'}</h2>
+              <button className="modal-close" onClick={closeModal}>✕</button>
+            </div>
+            <form className="student-form" onSubmit={handleSaveStudent}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Student Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleFormChange}
+                    placeholder="Enter student name"
+                    required
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>LRN *</label>
+                    <input
+                      type="text"
+                      name="lrn"
+                      value={formData.lrn}
+                      onChange={handleFormChange}
+                      placeholder="Enter LRN"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Status *</label>
+                    <select name="status" value={formData.status} onChange={handleFormChange} required>
+                      <option>Active</option>
+                      <option>Inactive</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Grade Level *</label>
+                    <select name="grade" value={formData.grade} onChange={handleFormChange} required>
+                      <option>Grade 1</option>
+                      <option>Grade 2</option>
+                      <option>Grade 3</option>
+                      <option>Grade 4</option>
+                      <option>Grade 5</option>
+                      <option>Grade 6</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Class *</label>
+                    <select name="class" value={formData.class} onChange={handleFormChange} required>
+                      <option>Class A</option>
+                      <option>Class B</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Student Portal Password *</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showEditPassword ? "text" : "password"}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleFormChange}
+                        placeholder="Enter portal password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn-password-toggle"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        title={showEditPassword ? 'Hide password' : 'Show password'}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {showEditPassword ? (
+                            <>
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </>
+                          ) : (
+                            <>
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                              <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <select name="gender" value={formData.gender} onChange={handleFormChange}>
+                      <option value="">Select Gender</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" name="dob" value={formData.dob} onChange={handleFormChange} />
+                  </div>
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <select name="gender" value={formData.gender} onChange={handleFormChange}>
+                      <option value="">Select Gender</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Address</label>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleFormChange}
+                    placeholder="Enter address"
+                    rows="3"
+                  ></textarea>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Parent/Guardian Name</label>
+                    <input
+                      type="text"
+                      name="parent"
+                      value={formData.parent}
+                      onChange={handleFormChange}
+                      placeholder="Enter parent/guardian name"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Contact Number</label>
+                    <input
+                      type="tel"
+                      name="contact"
+                      value={formData.contact}
+                      onChange={handleFormChange}
+                      placeholder="Enter contact number"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={closeModal}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  {editingStudent ? 'Save Changes' : 'Add Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showViewModal && viewingStudent && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Student Details</h2>
+              <button className="modal-close" onClick={closeViewModal}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="view-section">
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Student Name</label>
+                    <p>{viewingStudent.name}</p>
+                  </div>
+                  <div className="view-field">
+                    <label>LRN</label>
+                    <p>{viewingStudent.lrn}</p>
+                  </div>
+                </div>
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Status</label>
+                    <p>
+                      <span className={`status-badge ${viewingStudent.status === 'Active' ? 'active' : 'inactive'}`}>
+                        {viewingStudent.status}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="view-field">
+                    <label>Grade Level</label>
+                    <p>{viewingStudent.grade}</p>
+                  </div>
+                </div>
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Class</label>
+                    <p>
+                      <span className={`class-badge-small ${viewingStudent.class === 'Class A' ? 'class-a' : 'class-b'}`}>
+                        {viewingStudent.class}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="view-field">
+                    <label>Gender</label>
+                    <p>{viewingStudent.gender}</p>
+                  </div>
+                </div>
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Student Portal Password</label>
+                    <div className="password-display">
+                      <p>{showPassword ? viewingStudent.password : '•'.repeat((viewingStudent.password || '').length)}</p>
+                      <button
+                        type="button"
+                        className="btn-password-toggle"
+                        onClick={() => setShowPassword(!showPassword)}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {showPassword ? (
+                            <>
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                              <circle cx="12" cy="12" r="3"></circle>
+                            </>
+                          ) : (
+                            <>
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                              <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Date of Birth</label>
+                    <p>{viewingStudent.dob}</p>
+                  </div>
+                  <div className="view-field">
+                    <label>Contact Number</label>
+                    <p>{viewingStudent.contact}</p>
+                  </div>
+                </div>
+                <div className="view-row-full">
+                  <div className="view-field">
+                    <label>Address</label>
+                    <p>{viewingStudent.address}</p>
+                  </div>
+                </div>
+                <div className="view-row">
+                  <div className="view-field">
+                    <label>Parent/Guardian Name</label>
+                    <p>{viewingStudent.parent}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={closeViewModal}>
+                Close
+              </button>
+              <button type="button" className="btn-primary" onClick={() => {openEditModal(viewingStudent); closeViewModal();}}>Edit Student</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Students;
