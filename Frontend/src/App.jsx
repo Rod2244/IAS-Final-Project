@@ -7,6 +7,8 @@ import Students from './Adminpages/students'
 import ProfileSettings from './Adminpages/profilesettings'
 import ViewGrades from './components/viewgrades'
 import AuthPage from './Adminpages/Auth'
+import StudentLayout from './StudentPages/StudentLayout'
+
 import './App.css'
 
 const LayoutWrapper = () => {
@@ -60,6 +62,8 @@ function App() {
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/*" element={<LayoutWrapper />} />
+        <Route path="/student" element={<StudentLayout />} />
+
       </Routes>
     </BrowserRouter>
   )

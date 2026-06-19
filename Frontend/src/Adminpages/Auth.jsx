@@ -30,11 +30,15 @@ const AuthPage = () => {
 
   const handleSignIn = (e) => {
     e.preventDefault();
-    // Prevent students from signing in
-    if (userRole === 'student') {
-      setIsSignUp(true);
-      return;
-    }
+   //Prevent students from signing in
+   // if (userRole === 'student') {
+     // setIsSignUp(true);
+      //return;
+    //}
+   if (userRole === 'student') {
+  navigate('/student');
+  return; // para ma view ko lang ang student layout without authentication logic hahaha clear nyo lang
+}
     // TODO: perform real authentication here
     navigate('/dashboard');
   };
