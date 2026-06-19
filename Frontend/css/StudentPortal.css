@@ -231,6 +231,23 @@
 .green-btn { background: var(--success); }
 .green-btn:hover { opacity: 0.88; }
 
+.download-btn {
+  background: var(--white);
+  color: var(--navy);
+  border: 1.5px solid var(--border);
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.download-btn:hover {
+  background: var(--bg);
+  border-color: var(--navy);
+}
+
 .student-note { color: var(--slate-light); margin: 0 0 18px; font-size: 13px; }
 
 /* ── GRADES TABLE ── */

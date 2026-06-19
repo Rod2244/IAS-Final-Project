@@ -12,6 +12,19 @@ const StudentGrades = () => {
     { subject: 'Reading', q1: 60, q2: 64, q3: 70, q4: 73, average: 66.75, remarks: 'Failed' },
   ];
 
+  const handleDownload = () => {
+    const headers = ['Subject', 'Q1', 'Q2', 'Q3', 'Q4', 'Average', 'Remarks'];
+    const rows = grades.map(g => [g.subject, g.q1, g.q2, g.q3, g.q4, g.average.toFixed(2), g.remarks]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'My_Grades.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const finalAverage = (
     grades.reduce((sum, item) => sum + item.average, 0) / grades.length
   ).toFixed(2);
@@ -29,6 +42,7 @@ const StudentGrades = () => {
         <div className="student-action-buttons">
           <button className="blue-btn">View Ranking</button>
           <button className="green-btn">Preview Report Card</button>
+          <button className="download-btn" onClick={handleDownload}>⬇ Download Grades</button>
         </div>
       </div>
 

@@ -14,7 +14,7 @@ const StudentAttendance = () => {
 
         <div className="student-summary-card">
           <h3>Absent</h3>
-          <p>1 Days</p>
+          <p>0 Days</p>
         </div>
 
         <div className="student-summary-card">
