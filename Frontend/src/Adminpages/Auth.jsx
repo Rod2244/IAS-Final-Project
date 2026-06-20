@@ -4,50 +4,124 @@ import '../../css/Auth.css';
 import bg from '../assets/background.jpg';
 import logo from '../assets/UniversityAuthlogo.png';
 
+const EyeIcon = ({ open }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {open ? (
+      <>
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ) : (
+      <>
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </>
+    )}
+  </svg>
+);
+
 const AuthPage = () => {
+  const navigate = useNavigate();
+
+  // Sign-in state
   const [isSignUp, setIsSignUp] = useState(false);
   const [userRole, setUserRole] = useState('student');
-  const [signUpRole, setSignUpRole] = useState('faculty');
   const [signUpError, setSignUpError] = useState('');
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+
+  // Modal flow state
+  const [step, setStep] = useState('login');
+
+  // Set-password modal state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  // MFA state
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otpError, setOtpError] = useState('');
 
   const handleToggle = () => {
     setIsSignUp(!isSignUp);
     setSignUpError('');
   };
 
-  const handleRoleChange = (role) => {
-    setUserRole(role);
-  };
-
-  const handleSignUpRoleChange = (role) => {
-    setSignUpRole(role);
-    setSignUpError('');
-  };
-
-  const navigate = useNavigate();
-
   const handleSignIn = (e) => {
     e.preventDefault();
-   //Prevent students from signing in
-   // if (userRole === 'student') {
-     // setIsSignUp(true);
-      //return;
-    //}
-   if (userRole === 'student') {
-  navigate('/student');
-  return; // para ma view ko lang ang student layout without authentication logic hahaha clear nyo lang
-}
-    // TODO: perform real authentication here
+    if (userRole === 'student') {
+      setStep('set-password');
+      return;
+    }
     navigate('/dashboard');
   };
 
   const handleSignUp = (e) => {
     e.preventDefault();
-    // TODO: perform sign-up logic then redirect
     navigate('/dashboard');
   };
+
+  const handleSetPassword = (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    setStep('mfa');
+  };
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d?$/.test(value)) return;
+    const next = [...otp];
+    next[index] = value;
+    setOtp(next);
+    if (value && index < 5) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    }
+  };
+
+  const handleVerifyOtp = (e) => {
+    e.preventDefault();
+    setOtpError('');
+    const code = otp.join('');
+    if (code.length < 6) {
+      setOtpError('Please enter the complete 6-digit code.');
+      return;
+    }
+    // TODO: validate OTP with backend
+    // On success → go to student dashboard
+    navigate('/student');
+  };
+
+  const handleResendOtp = () => {
+    setOtp(['', '', '', '', '', '']);
+    setOtpError('');
+    // TODO: trigger resend API call
+  };
+
+  const handleCloseModal = () => {
+    setStep('login');
+    setPasswordError('');
+    setOtpError('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setOtp(['', '', '', '', '', '']);
+  };
+
+  const isStudentTab = userRole === 'student';
 
   return (
     <div
@@ -74,53 +148,45 @@ const AuthPage = () => {
         <div className="form-container sign-in-container">
           <form className="auth-form" onSubmit={handleSignIn}>
             <h1 className="form-title">Sign In</h1>
-            
-            {/* Role Toggle Tabs */}
+
             <div className="role-tabs">
-              <button 
+              <button
                 type="button"
                 className={`role-tab ${userRole === 'student' ? 'active' : ''}`}
-                onClick={() => handleRoleChange('student')}
+                onClick={() => setUserRole('student')}
               >
                 Student
               </button>
-              <button 
+              <button
                 type="button"
                 className={`role-tab ${userRole === 'faculty' ? 'active' : ''}`}
-                onClick={() => handleRoleChange('faculty')}
+                onClick={() => setUserRole('faculty')}
               >
                 Faculty/Prof
               </button>
             </div>
 
             <div className="form-group">
-              <input type="text" placeholder={userRole === 'student' ? 'Student ID' : 'Faculty ID'} />
+              <input
+                type="text"
+                placeholder={isStudentTab ? 'Learner Reference Number (LRN)' : 'Faculty ID'}
+              />
             </div>
             <div className="form-group password-group">
-              <input type={showSignInPassword ? 'text' : 'password'} placeholder="Password" />
-              <button 
-                type="button" 
+              <input
+                type={showSignInPassword ? 'text' : 'password'}
+                placeholder="Password"
+              />
+              <button
+                type="button"
                 className="password-toggle"
                 onClick={() => setShowSignInPassword(!showSignInPassword)}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  {showSignInPassword ? (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </>
-                  ) : (
-                    <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </>
-                  )}
-                </svg>
+                <EyeIcon open={showSignInPassword} />
               </button>
             </div>
-            
+
             <a href="#" className="forgot-link">Forgot your password?</a>
-            
             <button type="submit" className="submit-btn">Sign In</button>
           </form>
         </div>
@@ -129,14 +195,10 @@ const AuthPage = () => {
         <div className="form-container sign-up-container">
           <form className="auth-form" onSubmit={handleSignUp}>
             <h1 className="form-title">Create Account</h1>
-            
             <div className="form-content-wrapper">
               {signUpError && (
-                <div className="signup-error-message">
-                  {signUpError}
-                </div>
+                <div className="signup-error-message">{signUpError}</div>
               )}
-              
               <div className="form-group">
                 <label>First Name</label>
                 <input type="text" required />
@@ -147,7 +209,7 @@ const AuthPage = () => {
               </div>
               <div className="form-group">
                 <label>Middle Initial</label>
-                <input type="text" maxLength="1" />
+                <input type="text" maxLength={1} />
               </div>
               <div className="form-group">
                 <label>Teacher Email</label>
@@ -161,60 +223,161 @@ const AuthPage = () => {
                 <label>Password</label>
                 <div className="password-input-wrapper">
                   <input type={showSignUpPassword ? 'text' : 'password'} required />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="password-toggle"
                     onClick={() => setShowSignUpPassword(!showSignUpPassword)}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      {showSignUpPassword ? (
-                        <>
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                          <circle cx="12" cy="12" r="3"></circle>
-                        </>
-                      ) : (
-                        <>
-                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                          <line x1="1" y1="1" x2="23" y2="23"></line>
-                        </>
-                      )}
-                    </svg>
+                    <EyeIcon open={showSignUpPassword} />
                   </button>
                 </div>
               </div>
-              
               <button type="submit" className="submit-btn">Sign Up</button>
             </div>
           </form>
         </div>
 
-        {/* Overlay Container */}
+        {/* Overlay */}
         <div className="overlay-container">
           <div className="overlay">
-            {/* Left Overlay Panel (shown when in sign-up mode) */}
             <div className="overlay-panel overlay-left">
               <h1 className="overlay-title">Welcome Back!</h1>
               <p className="overlay-description">
                 To keep connected with your academic portal please login with your personal info
               </p>
-              <button className="ghost-btn" onClick={handleToggle}>
-                Sign In
-              </button>
+              <button className="ghost-btn" onClick={handleToggle}>Sign In</button>
             </div>
-            
-            {/* Right Overlay Panel (shown when in sign-in mode) */}
             <div className="overlay-panel overlay-right">
               <h1 className="overlay-title">Hello, Friend!</h1>
               <p className="overlay-description">
                 Enter your personal details and start your journey with the academic portal
               </p>
-              <button className="ghost-btn" onClick={handleToggle}>
-                Sign Up
-              </button>
+              {!isStudentTab && (
+                <button className="ghost-btn" onClick={handleToggle}>Sign Up</button>
+              )}
+              {isStudentTab && (
+                <p className="overlay-note">
+                  Student accounts are created by the registrar's office. Contact your administrator for access.
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal: Set New Password */}
+      {step === 'set-password' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-key">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Set New Password</h2>
+            <p className="modal-subtitle">
+              Your first login requires a new password. Choose something strong and memorable.
+            </p>
+
+            <form className="modal-form" onSubmit={handleSetPassword}>
+              {passwordError && (
+                <div className="modal-error">{passwordError}</div>
+              )}
+              <div className="form-group password-group">
+                <label>New Password</label>
+                <div className="password-input-wrapper">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowNewPass(!showNewPass)}>
+                    <EyeIcon open={showNewPass} />
+                  </button>
+                </div>
+              </div>
+              <div className="form-group password-group">
+                <label>Confirm New Password</label>
+                <div className="password-input-wrapper">
+                  <input
+                    type={showConfirmPass ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter your password"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowConfirmPass(!showConfirmPass)}>
+                    <EyeIcon open={showConfirmPass} />
+                  </button>
+                </div>
+              </div>
+              <div className="password-strength-hints">
+                <span className={newPassword.length >= 8 ? 'hint-met' : 'hint-unmet'}>✓ At least 8 characters</span>
+                <span className={/[A-Z]/.test(newPassword) ? 'hint-met' : 'hint-unmet'}>✓ One uppercase letter</span>
+                <span className={/\d/.test(newPassword) ? 'hint-met' : 'hint-unmet'}>✓ One number</span>
+              </div>
+              <button type="submit" className="submit-btn modal-submit-btn">Continue</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: MFA / OTP */}
+      {step === 'mfa' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-shield">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <polyline points="9 12 11 14 15 10" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Verify Your Identity</h2>
+            <p className="modal-subtitle">
+              A 6-digit verification code has been sent to your registered email or mobile number.
+            </p>
+
+            <form className="modal-form" onSubmit={handleVerifyOtp}>
+              {otpError && <div className="modal-error">{otpError}</div>}
+
+              <div className="otp-group">
+                {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    id={`otp-${i}`}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                    className="otp-input"
+                    autoFocus={i === 0}
+                  />
+                ))}
+              </div>
+
+              <button type="submit" className="submit-btn modal-submit-btn">Verify & Continue</button>
+
+              <div className="otp-resend">
+                Didn't receive a code?{' '}
+                <button type="button" className="resend-btn" onClick={handleResendOtp}>
+                  Resend Code
+                </button>
+              </div>
+            </form>
+
+            <p className="modal-back-note">
+              After verification you'll be redirected back to{' '}
+              <button type="button" className="resend-btn" onClick={handleCloseModal}>
+                Sign In
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

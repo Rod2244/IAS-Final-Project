@@ -5,6 +5,16 @@ import StudentGrades from './StudentGrades';
 import StudentAttendance from './StudentAttendance';
 import StudentSchedule from './StudentSchedule';
 import logo from '../assets/UniversityAuthlogo.png';
+import {
+  LayoutDashboard,
+  BookOpen,
+  CalendarCheck,
+  Clock,
+  LogOut,
+  User,
+  ChevronDown,
+  GraduationCap,
+} from 'lucide-react';
 
 const StudentLayout = () => {
   const [activeTab, setActiveTab] = useState('grades');
@@ -22,7 +32,6 @@ const StudentLayout = () => {
   }, []);
 
   const handleLogout = () => {
-    // Clear any stored session/auth data, then send the student back to login.
     localStorage.removeItem('studentToken');
     sessionStorage.clear();
     window.location.href = '/login';
@@ -35,18 +44,20 @@ const StudentLayout = () => {
     schoolYear: '2026-2027',
   };
 
+  const tabs = [
+    { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { key: 'grades',    label: 'My Grades', icon: <BookOpen size={18} /> },
+    { key: 'attendance',label: 'Attendance', icon: <CalendarCheck size={18} /> },
+    { key: 'schedule',  label: 'Schedule',   icon: <Clock size={18} /> },
+  ];
+
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return <StudentDashboard studentInfo={studentInfo} />;
-      case 'grades':
-        return <StudentGrades />;
-      case 'attendance':
-        return <StudentAttendance />;
-      case 'schedule':
-        return <StudentSchedule />;
-      default:
-        return <StudentGrades />;
+      case 'dashboard':  return <StudentDashboard studentInfo={studentInfo} />;
+      case 'grades':     return <StudentGrades />;
+      case 'attendance': return <StudentAttendance />;
+      case 'schedule':   return <StudentSchedule />;
+      default:           return <StudentGrades />;
     }
   };
 
@@ -71,25 +82,19 @@ const StudentLayout = () => {
               <strong>{studentInfo.name}</strong>
               <p>{studentInfo.gradeLevel}</p>
             </div>
-            <span className={`profile-caret ${profileMenuOpen ? 'open' : ''}`}>▾</span>
+            <ChevronDown size={16} className={`profile-caret ${profileMenuOpen ? 'open' : ''}`} />
           </div>
 
           {profileMenuOpen && (
             <div className="profile-dropdown">
               <button
                 className="profile-dropdown-item"
-                onClick={() => {
-                  setActiveTab('dashboard');
-                  setProfileMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab('dashboard'); setProfileMenuOpen(false); }}
               >
-                View Profile
+                <User size={15} /> View Profile
               </button>
-              <button
-                className="profile-dropdown-item logout-item"
-                onClick={handleLogout}
-              >
-                Logout
+              <button className="profile-dropdown-item logout-item" onClick={handleLogout}>
+                <LogOut size={15} /> Logout
               </button>
             </div>
           )}
@@ -98,7 +103,7 @@ const StudentLayout = () => {
 
       <main className="student-main">
         <section className="student-hero-card">
-          <div className="student-hero-icon">📘</div>
+          <div className="student-hero-icon"><GraduationCap size={36} color="#ffffff" /></div>
           <div>
             <h2>{studentInfo.gradeLevel}</h2>
             <p>Welcome back, {studentInfo.name}</p>
@@ -108,30 +113,16 @@ const StudentLayout = () => {
         </section>
 
         <nav className="student-tabs">
-          <button
-            className={activeTab === 'dashboard' ? 'active' : ''}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            Dashboard
-          </button>
-          <button
-            className={activeTab === 'grades' ? 'active' : ''}
-            onClick={() => setActiveTab('grades')}
-          >
-            My Grades
-          </button>
-          <button
-            className={activeTab === 'attendance' ? 'active' : ''}
-            onClick={() => setActiveTab('attendance')}
-          >
-            Attendance
-          </button>
-          <button
-            className={activeTab === 'schedule' ? 'active' : ''}
-            onClick={() => setActiveTab('schedule')}
-          >
-            Schedule
-          </button>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              className={activeTab === tab.key ? 'active' : ''}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </nav>
 
         <section className="student-content">

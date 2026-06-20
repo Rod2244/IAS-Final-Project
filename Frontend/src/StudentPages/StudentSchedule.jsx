@@ -1,12 +1,13 @@
 import React from 'react';
 import '../../css/StudentPortal.css';
+import { Clock, GraduationCap, UserRound } from 'lucide-react';
 
 const StudentSchedule = () => {
   const schedule = [
-    { time: '8:00 AM - 9:00 AM', subject: 'Filipino', teacher: 'Mrs. Bautista' },
-    { time: '9:00 AM - 10:00 AM', subject: 'Math', teacher: 'Mr. Domingo' },
-    { time: '10:00 AM - 11:00 AM', subject: 'Reading', teacher: 'Ms. Velasquez' },
-    { time: '1:00 PM - 2:00 PM', subject: 'Language', teacher: 'Mr. Reyes' },
+    { time: '8:00 AM - 9:00 AM',   subject: 'Filipino', teacher: 'Mrs. Bautista' },
+    { time: '9:00 AM - 10:00 AM',  subject: 'Math',     teacher: 'Mr. Domingo'   },
+    { time: '10:00 AM - 11:00 AM', subject: 'Reading',  teacher: 'Ms. Velasquez' },
+    { time: '1:00 PM - 2:00 PM',   subject: 'Language', teacher: 'Mr. Reyes'     },
   ];
 
   return (
@@ -16,9 +17,9 @@ const StudentSchedule = () => {
       <div className="schedule-list">
         {schedule.map((item, index) => (
           <div className="schedule-card" key={index}>
-            <h3>{item.subject}</h3>
-            <p><strong>Time:</strong> {item.time}</p>
-            <p><strong>Teacher:</strong> {item.teacher}</p>
+            <h3><GraduationCap size={18} style={{ marginRight: 6, verticalAlign: 'middle' }} />{item.subject}</h3>
+            <p><Clock size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /><strong>Time:</strong> {item.time}</p>
+            <p><UserRound size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /><strong>Teacher:</strong> {item.teacher}</p>
           </div>
         ))}
       </div>

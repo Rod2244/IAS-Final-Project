@@ -1,15 +1,16 @@
 import React from 'react';
 import '../../css/StudentPortal.css';
+import { Trophy, FileText, Download } from 'lucide-react';
 
 const StudentGrades = () => {
   const grades = [
-    { subject: 'Filipino', q1: 85, q2: 87, q3: 89, q4: 90, average: 87.75, remarks: 'Passed' },
-    { subject: 'GMRC', q1: 92, q2: 90, q3: 94, q4: 93, average: 92.25, remarks: 'Passed' },
-    { subject: 'Language', q1: 88, q2: 85, q3: 86, q4: 89, average: 87.0, remarks: 'Passed' },
+    { subject: 'Filipino',   q1: 85, q2: 87, q3: 89, q4: 90, average: 87.75, remarks: 'Passed' },
+    { subject: 'GMRC',       q1: 92, q2: 90, q3: 94, q4: 93, average: 92.25, remarks: 'Passed' },
+    { subject: 'Language',   q1: 88, q2: 85, q3: 86, q4: 89, average: 87.0,  remarks: 'Passed' },
     { subject: 'Literature', q1: 78, q2: 80, q3: 82, q4: 81, average: 80.25, remarks: 'Passed' },
-    { subject: 'Makabansa', q1: 90, q2: 91, q3: 88, q4: 92, average: 90.25, remarks: 'Passed' },
-    { subject: 'Math', q1: 65, q2: 68, q3: 72, q4: 70, average: 68.75, remarks: 'Failed' },
-    { subject: 'Reading', q1: 60, q2: 64, q3: 70, q4: 73, average: 66.75, remarks: 'Failed' },
+    { subject: 'Makabansa',  q1: 90, q2: 91, q3: 88, q4: 92, average: 90.25, remarks: 'Passed' },
+    { subject: 'Math',       q1: 65, q2: 68, q3: 72, q4: 70, average: 68.75, remarks: 'Failed' },
+    { subject: 'Reading',    q1: 60, q2: 64, q3: 70, q4: 73, average: 66.75, remarks: 'Failed' },
   ];
 
   const handleDownload = () => {
@@ -40,9 +41,15 @@ const StudentGrades = () => {
         </div>
 
         <div className="student-action-buttons">
-          <button className="blue-btn">View Ranking</button>
-          <button className="green-btn">Preview Report Card</button>
-          <button className="download-btn" onClick={handleDownload}>⬇ Download Grades</button>
+          <button className="blue-btn">
+            <Trophy size={15} /> View Ranking
+          </button>
+          <button className="green-btn">
+            <FileText size={15} /> Preview Report Card
+          </button>
+          <button className="download-btn" onClick={handleDownload}>
+            <Download size={15} /> Download Grades
+          </button>
         </div>
       </div>
 
