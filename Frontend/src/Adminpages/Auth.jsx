@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import '../../css/Auth.css';
 import bg from '../assets/background.jpg';
 import logo from '../assets/UniversityAuthlogo.png';
+import { authService } from '../services/apiClient';
 
 const EyeIcon = ({ open }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -26,9 +27,23 @@ const AuthPage = () => {
   // Sign-in state
   const [isSignUp, setIsSignUp] = useState(false);
   const [userRole, setUserRole] = useState('student');
-  const [signUpError, setSignUpError] = useState('');
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Sign In Form State
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [signInError, setSignInError] = useState('');
+
+  // Sign Up Form State
+  const [signUpFirstName, setSignUpFirstName] = useState('');
+  const [signUpLastName, setSignUpLastName] = useState('');
+  const [signUpMiddleInitial, setSignUpMiddleInitial] = useState('');
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpFacultyId, setSignUpFacultyId] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+  const [signUpError, setSignUpError] = useState('');
 
   // Modal flow state
   const [step, setStep] = useState('login');
@@ -43,24 +58,106 @@ const AuthPage = () => {
   // MFA state
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState('');
+  const [userEmail, setUserEmail] = useState('');
 
   const handleToggle = () => {
     setIsSignUp(!isSignUp);
     setSignUpError('');
+    setSignInError('');
   };
 
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
-    if (userRole === 'student') {
-      setStep('set-password');
-      return;
+    setSignInError('');
+    setIsLoading(true);
+
+    try {
+      // Use email as the identifier for both students and faculty
+      const result = await authService.signIn(signInEmail, signInPassword);
+
+      if (result.success) {
+        const actualRole = result.userRole;
+
+        // Prevent admin/teacher accounts from signing in through student tab
+        if (userRole === 'student' && actualRole !== 'student') {
+          throw new Error('This account must sign in through the Faculty/Prof tab.');
+        }
+
+        // Prevent student accounts from signing in through faculty tab
+        if (userRole === 'faculty' && actualRole === 'student') {
+          throw new Error('Use the Student tab to sign in with this account.');
+        }
+
+        // Store user role
+        localStorage.setItem('userRole', actualRole);
+
+        if (actualRole === 'student') {
+          navigate('/student');
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    } catch (error) {
+      setSignInError(error.response?.data?.error || error.message || 'Sign in failed. Please try again.');
+      console.error('Sign in error:', error);
+    } finally {
+      setIsLoading(false);
     }
-    navigate('/dashboard');
   };
 
-  const handleSignUp = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    setSignUpError('');
+    setIsLoading(true);
+
+    try {
+      // Validation
+      if (!signUpFirstName || !signUpLastName || !signUpEmail || !signUpPassword) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      if (signUpPassword.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
+
+      const signUpRole = userRole === 'faculty' ? 'teacher' : userRole;
+
+      // Call signup API with all profile data
+      const result = await authService.signUp(
+        signUpEmail,
+        signUpPassword,
+        signUpRole,
+        {
+          firstName: signUpFirstName,
+          lastName: signUpLastName,
+          middleInitial: signUpMiddleInitial,
+          facultyId: signUpFacultyId,
+        }
+      );
+      
+      if (result.success) {
+        // Store email for later reference
+        setUserEmail(signUpEmail);
+        // Show success message
+        setSignUpError(''); // Clear errors
+        // Reset form
+        setSignUpFirstName('');
+        setSignUpLastName('');
+        setSignUpMiddleInitial('');
+        setSignUpEmail('');
+        setSignUpFacultyId('');
+        setSignUpPassword('');
+        // Toggle back to sign in
+        setIsSignUp(false);
+        // Show success message
+        alert('Account created successfully! Please sign in with your credentials.');
+      }
+    } catch (error) {
+      setSignUpError(error.response?.data?.error || error.message || 'Sign up failed. Please try again.');
+      console.error('Sign up error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSetPassword = (e) => {
@@ -166,28 +263,45 @@ const AuthPage = () => {
               </button>
             </div>
 
+            {signInError && (
+              <div style={{ color: '#d32f2f', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                {signInError}
+              </div>
+            )}
+
             <div className="form-group">
               <input
-                type="text"
-                placeholder={isStudentTab ? 'Learner Reference Number (LRN)' : 'Faculty ID'}
+                type="email"
+                placeholder="Email"
+                value={signInEmail}
+                onChange={(e) => setSignInEmail(e.target.value)}
+                required
+                disabled={isLoading}
               />
             </div>
             <div className="form-group password-group">
               <input
                 type={showSignInPassword ? 'text' : 'password'}
                 placeholder="Password"
+                value={signInPassword}
+                onChange={(e) => setSignInPassword(e.target.value)}
+                required
+                disabled={isLoading}
               />
               <button
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowSignInPassword(!showSignInPassword)}
+                disabled={isLoading}
               >
                 <EyeIcon open={showSignInPassword} />
               </button>
             </div>
 
             <a href="#" className="forgot-link">Forgot your password?</a>
-            <button type="submit" className="submit-btn">Sign In</button>
+            <button type="submit" className="submit-btn" disabled={isLoading}>
+              {isLoading ? 'Signing In...' : 'Sign In'}
+            </button>
           </form>
         </div>
 
@@ -201,38 +315,77 @@ const AuthPage = () => {
               )}
               <div className="form-group">
                 <label>First Name</label>
-                <input type="text" required />
+                <input 
+                  type="text" 
+                  value={signUpFirstName}
+                  onChange={(e) => setSignUpFirstName(e.target.value)}
+                  required 
+                  disabled={isLoading}
+                />
               </div>
               <div className="form-group">
                 <label>Last Name</label>
-                <input type="text" required />
+                <input 
+                  type="text" 
+                  value={signUpLastName}
+                  onChange={(e) => setSignUpLastName(e.target.value)}
+                  required 
+                  disabled={isLoading}
+                />
               </div>
               <div className="form-group">
                 <label>Middle Initial</label>
-                <input type="text" maxLength={1} />
+                <input 
+                  type="text" 
+                  maxLength={1}
+                  value={signUpMiddleInitial}
+                  onChange={(e) => setSignUpMiddleInitial(e.target.value)}
+                  disabled={isLoading}
+                />
               </div>
               <div className="form-group">
                 <label>Teacher Email</label>
-                <input type="email" required />
+                <input 
+                  type="email" 
+                  value={signUpEmail}
+                  onChange={(e) => setSignUpEmail(e.target.value)}
+                  required 
+                  disabled={isLoading}
+                />
               </div>
               <div className="form-group">
                 <label>Faculty ID</label>
-                <input type="text" required />
+                <input 
+                  type="text" 
+                  value={signUpFacultyId}
+                  onChange={(e) => setSignUpFacultyId(e.target.value)}
+                  required 
+                  disabled={isLoading}
+                />
               </div>
               <div className="form-group password-group">
                 <label>Password</label>
                 <div className="password-input-wrapper">
-                  <input type={showSignUpPassword ? 'text' : 'password'} required />
+                  <input 
+                    type={showSignUpPassword ? 'text' : 'password'} 
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
+                    required 
+                    disabled={isLoading}
+                  />
                   <button
                     type="button"
                     className="password-toggle"
                     onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                    disabled={isLoading}
                   >
                     <EyeIcon open={showSignUpPassword} />
                   </button>
                 </div>
               </div>
-              <button type="submit" className="submit-btn">Sign Up</button>
+              <button type="submit" className="submit-btn" disabled={isLoading}>
+                {isLoading ? 'Creating Account...' : 'Sign Up'}
+              </button>
             </div>
           </form>
         </div>
@@ -252,10 +405,10 @@ const AuthPage = () => {
               <p className="overlay-description">
                 Enter your personal details and start your journey with the academic portal
               </p>
-              {!isStudentTab && (
+              {userRole === 'faculty' && (
                 <button className="ghost-btn" onClick={handleToggle}>Sign Up</button>
               )}
-              {isStudentTab && (
+              {userRole === 'student' && (
                 <p className="overlay-note">
                   Student accounts are created by the registrar's office. Contact your administrator for access.
                 </p>
