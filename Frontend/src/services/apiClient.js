@@ -1,27 +1,99 @@
-import { supabase } from "./supabase";
+import axios from "axios";
+
+// API base URL
+const API_BASE_URL = "http://localhost:5000/api";
+
+// Create axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  withCredentials: true,
+});
+
+// Simple input sanitizer to reduce XSS injection risk in outgoing payloads
+const sanitize = (str) => {
+  if (typeof str !== "string") return str;
+  return str.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "").trim();
+};
+
+// Fetch CSRF token on first app load if not already cached
+let csrfTokenPromise = null;
+
+const fetchCsrfToken = async () => {
+  try {
+    const response = await axios.get("http://localhost:5000/api/auth/csrf-token", {
+      withCredentials: true,
+    });
+    return response.data.csrfToken;
+  } catch (error) {
+    console.warn("Failed to fetch CSRF token", error);
+    return null;
+  }
+};
+
+// Attach CSRF token from cookie to state-changing requests
+apiClient.interceptors.request.use(async (config) => {
+  if (["post", "put", "patch", "delete"].includes(config.method)) {
+    // Try to get token from cookie first
+    let csrfToken = document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("XSRF-TOKEN="));
+
+    if (!csrfToken) {
+      // If no token in cookie, fetch it
+      if (!csrfTokenPromise) {
+        csrfTokenPromise = fetchCsrfToken();
+      }
+      csrfToken = await csrfTokenPromise;
+    } else {
+      // Extract value from cookie string
+      csrfToken = csrfToken.split("=")[1];
+    }
+
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
+  }
+
+  return config;
+});
+
+// Add token to requests if available
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("authToken");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // ============================================================================
 // AUTHENTICATION SERVICES
 // ============================================================================
 
 export const authService = {
-  async signUp(email, password, role = "student") {
+  async signUp(email, password, role = "student", profileData = {}) {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+      const response = await apiClient.post("/auth/signup", {
+        email: sanitize(email),
+        password: sanitize(password),
+        role: sanitize(role),
+        firstName: sanitize(profileData.firstName) || null,
+        lastName: sanitize(profileData.lastName) || null,
+        middleInitial: sanitize(profileData.middleInitial) || null,
+        facultyId: sanitize(profileData.facultyId) || null,
       });
-      if (error) throw error;
-
-      // Create user record with role
-      await supabase.from("users").insert({
-        id: data.user?.id,
-        email,
-        role,
-        status: "Active",
-      });
-
-      return data;
+      if (response.data.success) {
+        // Store token if provided
+        if (response.data.session?.access_token) {
+          localStorage.setItem("authToken", response.data.session.access_token);
+        }
+        return response.data;
+      }
+      throw new Error(response.data.error || "Sign up failed");
     } catch (error) {
       console.error("Sign up error:", error);
       throw error;
@@ -30,61 +102,152 @@ export const authService = {
 
   async signIn(email, password) {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await apiClient.post("/auth/signin", {
+        email: sanitize(email),
+        password: sanitize(password),
       });
-      if (error) throw error;
-      return data;
+      if (response.data.success) {
+        // Store token for future requests
+        if (response.data.session?.access_token) {
+          localStorage.setItem("authToken", response.data.session.access_token);
+        }
+        // Store session token
+        if (response.data.sessionToken) {
+          localStorage.setItem("sessionToken", response.data.sessionToken);
+        }
+        // Store user info
+        localStorage.setItem("user", JSON.stringify(response.data.user));
+        localStorage.setItem("userRole", response.data.userRole);
+        return response.data;
+      }
+      throw new Error(response.data.error || "Sign in failed");
     } catch (error) {
       console.error("Sign in error:", error);
       throw error;
     }
   },
 
+  async sendOtp(email) {
+    try {
+      const response = await apiClient.post("/auth/mfa/send", {
+        email: sanitize(email),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Send OTP error:", error);
+      throw error;
+    }
+  },
+
+  async verifyOtp(email, code, ipAddress, userAgent) {
+    try {
+      const response = await apiClient.post("/auth/mfa/verify", {
+        email: sanitize(email),
+        code: sanitize(code),
+        ipAddress,
+        userAgent,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Verify OTP error:", error);
+      throw error;
+    }
+  },
+
   async signOut() {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      return { success: true };
+      const sessionToken = localStorage.getItem("sessionToken");
+      const response = await apiClient.post("/auth/signout", {
+        sessionToken,
+      });
+      // Clear local storage
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("sessionToken");
+      localStorage.removeItem("user");
+      localStorage.removeItem("userRole");
+      return response.data;
     } catch (error) {
       console.error("Sign out error:", error);
+      // Still clear local storage even if API call fails
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("sessionToken");
+      localStorage.removeItem("user");
+      localStorage.removeItem("userRole");
+      throw error;
+    }
+  },
+
+  async requestPasswordReset(email) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/request", {
+        email: sanitize(email),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Request password reset error:", error);
+      throw error;
+    }
+  },
+
+  async verifyPasswordResetOtp(email, code) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/verify", {
+        email: sanitize(email),
+        code: sanitize(code),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Verify password reset OTP error:", error);
+      throw error;
+    }
+  },
+
+  async completePasswordReset(email, code, newPassword) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/complete", {
+        email: sanitize(email),
+        code: sanitize(code),
+        newPassword: sanitize(newPassword),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Complete password reset error:", error);
       throw error;
     }
   },
 
   async getSession() {
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) throw error;
-      return data.session;
+      const token = localStorage.getItem("authToken");
+      if (!token) return null;
+      // Verify token is still valid
+      const user = localStorage.getItem("user");
+      return {
+        access_token: token,
+        user: user ? JSON.parse(user) : null,
+      };
     } catch (error) {
       console.error("Get session error:", error);
-      throw error;
+      return null;
     }
   },
 
   async getCurrentUser() {
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-      if (error) throw error;
-      return user;
+      const user = localStorage.getItem("user");
+      return user ? JSON.parse(user) : null;
     } catch (error) {
       console.error("Get current user error:", error);
-      throw error;
+      return null;
     }
   },
 
   async updatePassword(newPassword) {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
+      const response = await apiClient.post("/auth/update-password", {
+        newPassword,
       });
-      if (error) throw error;
-      return { success: true };
+      return response.data;
     } catch (error) {
       console.error("Update password error:", error);
       throw error;
