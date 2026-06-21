@@ -8,6 +8,7 @@ const authRoutes = require("./routes/authRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const gradeRoutes = require("./routes/gradeRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
+const subjectRoutes = require("./routes/subjectRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/grades", gradeRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/subjects", subjectRoutes);
 
 // 404 Handler
 app.use((req, res) => {
