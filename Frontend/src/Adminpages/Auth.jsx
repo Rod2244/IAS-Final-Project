@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../css/Auth.css';
 import bg from '../assets/background.jpg';
@@ -43,6 +43,7 @@ const AuthPage = () => {
   const [signUpEmail, setSignUpEmail] = useState('');
   const [signUpFacultyId, setSignUpFacultyId] = useState('');
   const [signUpPassword, setSignUpPassword] = useState('');
+  const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('');
   const [signUpError, setSignUpError] = useState('');
 
   // Modal flow state
@@ -58,7 +59,19 @@ const AuthPage = () => {
   // MFA state
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState('');
+  const [otpMessage, setOtpMessage] = useState('');
   const [userEmail, setUserEmail] = useState('');
+
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetCode, setResetCode] = useState(['', '', '', '', '', '']);
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [showResetNewPass, setShowResetNewPass] = useState(false);
+  const [showResetConfirmPass, setShowResetConfirmPass] = useState(false);
+  const [resetResendCooldown, setResetResendCooldown] = useState(0);
+  const [mfaResendCooldown, setMfaResendCooldown] = useState(0);
 
   const handleToggle = () => {
     setIsSignUp(!isSignUp);
@@ -88,6 +101,16 @@ const AuthPage = () => {
           throw new Error('Use the Student tab to sign in with this account.');
         }
 
+        // If MFA is required, show MFA modal and stop navigation
+        if (result.mfaRequired) {
+          setUserEmail(result.email);
+          // normalize role for UI
+          setUserRole(result.userRole === 'admin' ? 'faculty' : result.userRole);
+          setMfaResendCooldown(60);
+          setStep('mfa');
+          return;
+        }
+
         // Store user role
         localStorage.setItem('userRole', actualRole);
 
@@ -112,12 +135,20 @@ const AuthPage = () => {
 
     try {
       // Validation
-      if (!signUpFirstName || !signUpLastName || !signUpEmail || !signUpPassword) {
+      if (!signUpFirstName || !signUpLastName || !signUpEmail || !signUpPassword || !signUpConfirmPassword) {
         throw new Error('Please fill in all required fields');
+      }
+
+      if (signUpPassword !== signUpConfirmPassword) {
+        throw new Error('Passwords do not match');
       }
 
       if (signUpPassword.length < 8) {
         throw new Error('Password must be at least 8 characters');
+      }
+
+      if (!isPasswordStrong(signUpPassword)) {
+        throw new Error('Password is not strong enough. Use uppercase, lowercase, number, and symbol.');
       }
 
       const signUpRole = userRole === 'faculty' ? 'teacher' : userRole;
@@ -160,11 +191,158 @@ const AuthPage = () => {
     }
   };
 
+  const isPasswordStrong = (password) => {
+    return /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/.test(password);
+  };
+
+  const getPasswordStrengthLabel = (password) => {
+    if (!password) return '';
+    if (isPasswordStrong(password)) return 'Strong password';
+    if (password.length >= 8) return 'Moderate password — add uppercase, number, and symbol';
+    return 'Weak password — at least 8 chars, uppercase, number, and symbol';
+  };
+
+  useEffect(() => {
+    if (resetResendCooldown <= 0 && mfaResendCooldown <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setResetResendCooldown((prev) => Math.max(prev - 1, 0));
+      setMfaResendCooldown((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [resetResendCooldown, mfaResendCooldown]);
+
+  const handleRequestReset = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    setIsLoading(true);
+
+    try {
+      if (!resetEmail) {
+        throw new Error('Please enter your email address.');
+      }
+
+      await authService.requestPasswordReset(resetEmail);
+      setResetCode(['', '', '', '', '', '']);
+      setStep('reset-verify');
+      setResetSuccess('A reset code has been sent to your email address.');
+      setResetResendCooldown(60);
+    } catch (err) {
+      setResetError(err.response?.data?.error || err.message || 'Unable to send reset code. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetCodeChange = (index, value) => {
+    const sanitized = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (sanitized.length > 1) return;
+    const next = [...resetCode];
+    next[index] = sanitized;
+    setResetCode(next);
+    if (sanitized && index < 5) {
+      document.getElementById(`reset-code-${index + 1}`)?.focus();
+    }
+  };
+
+  const handleResetCodeKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !resetCode[index] && index > 0) {
+      document.getElementById(`reset-code-${index - 1}`)?.focus();
+    }
+  };
+
+  const handleVerifyResetCode = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    const code = resetCode.join('');
+
+    if (code.length < 6) {
+      setResetError('Please enter the complete 6-character code.');
+      return;
+    }
+
+    try {
+      const response = await authService.verifyPasswordResetOtp(resetEmail, code);
+      if (response.success) {
+        setStep('reset-complete');
+        setResetSuccess('Code verified. Enter your new password below.');
+      } else {
+        setResetError(response.error || 'Invalid or expired code. Please try again.');
+      }
+    } catch (err) {
+      setResetError(err.response?.data?.error || err.message || 'Unable to verify reset code.');
+    }
+  };
+
+  const handleResendResetCode = async () => {
+    if (resetResendCooldown > 0) return;
+
+    setResetError('');
+    setResetSuccess('');
+    setResetCode(['', '', '', '', '', '']);
+
+    try {
+      await authService.requestPasswordReset(resetEmail);
+      setResetSuccess('A new reset code has been sent to your email.');
+      setResetResendCooldown(60);
+    } catch (err) {
+      setResetError(err.response?.data?.error || err.message || 'Unable to resend reset code. Please try again.');
+    }
+  };
+
+  const handleCompletePasswordReset = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+
+    if (!newResetPassword || !confirmResetPassword) {
+      setResetError('Please enter and confirm your new password.');
+      return;
+    }
+    if (newResetPassword.length < 8) {
+      setResetError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!isPasswordStrong(newResetPassword)) {
+      setResetError('Password is not strong enough.');
+      return;
+    }
+    if (newResetPassword !== confirmResetPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+
+    const code = resetCode.join('');
+    if (code.length < 6) {
+      setResetError('Please enter the complete 6-character code.');
+      return;
+    }
+
+    try {
+      const response = await authService.completePasswordReset(resetEmail, code, newResetPassword);
+      if (response.success) {
+        setStep('reset-success');
+        setResetSuccess(response.message || 'Your password has been changed successfully.');
+      } else {
+        setResetError(response.error || 'Unable to reset password. Please try again.');
+      }
+    } catch (err) {
+      setResetError(err.response?.data?.error || err.message || 'Unable to reset password.');
+    }
+  };
+
   const handleSetPassword = (e) => {
     e.preventDefault();
     setPasswordError('');
     if (newPassword.length < 8) {
       setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!isPasswordStrong(newPassword)) {
+      setPasswordError('Password is not strong enough.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -175,11 +353,12 @@ const AuthPage = () => {
   };
 
   const handleOtpChange = (index, value) => {
-    if (!/^\d?$/.test(value)) return;
+    const sanitized = value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    if (sanitized.length > 1) return;
     const next = [...otp];
-    next[index] = value;
+    next[index] = sanitized;
     setOtp(next);
-    if (value && index < 5) {
+    if (sanitized && index < 5) {
       document.getElementById(`otp-${index + 1}`)?.focus();
     }
   };
@@ -193,29 +372,70 @@ const AuthPage = () => {
   const handleVerifyOtp = (e) => {
     e.preventDefault();
     setOtpError('');
+    setOtpMessage('');
     const code = otp.join('');
     if (code.length < 6) {
-      setOtpError('Please enter the complete 6-digit code.');
+      setOtpError('Please enter the complete 6-character code.');
       return;
     }
-    // TODO: validate OTP with backend
-    // On success → go to student dashboard
-    navigate('/student');
+
+    // Verify OTP with backend
+    (async () => {
+      try {
+        const response = await authService.verifyOtp(
+          userEmail || signInEmail,
+          code,
+          window.location.hostname,
+          navigator.userAgent,
+        );
+
+        if (response.success) {
+          const role = response.userRole || localStorage.getItem('userRole') || 'student';
+          localStorage.setItem('userRole', role);
+          if (role === 'student') navigate('/student');
+          else navigate('/dashboard');
+        } else {
+          setOtpError(response.error || 'Invalid code. Please try again.');
+        }
+      } catch (err) {
+        setOtpError(err.response?.data?.error || err.message || 'Verification failed. Please try again.');
+      }
+    })();
   };
 
-  const handleResendOtp = () => {
+  const handleResendOtp = async () => {
+    if (mfaResendCooldown > 0) return;
+
     setOtp(['', '', '', '', '', '']);
     setOtpError('');
-    // TODO: trigger resend API call
+    setOtpMessage('');
+    try {
+      await authService.sendOtp(userEmail || signInEmail);
+      setOtpMessage('A new verification code has been sent to your email.');
+      setMfaResendCooldown(60);
+    } catch (err) {
+      console.error('Resend OTP error:', err);
+      setOtpError('Unable to resend code right now. Please try again shortly.');
+    }
   };
 
   const handleCloseModal = () => {
     setStep('login');
     setPasswordError('');
     setOtpError('');
+    setResetError('');
+    setResetSuccess('');
     setNewPassword('');
     setConfirmPassword('');
     setOtp(['', '', '', '', '', '']);
+    setResetEmail('');
+    setResetCode(['', '', '', '', '', '']);
+    setNewResetPassword('');
+    setConfirmResetPassword('');
+    setShowResetNewPass(false);
+    setShowResetConfirmPass(false);
+    setResetResendCooldown(0);
+    setMfaResendCooldown(0);
   };
 
   const isStudentTab = userRole === 'student';
@@ -298,7 +518,7 @@ const AuthPage = () => {
               </button>
             </div>
 
-            <a href="#" className="forgot-link">Forgot your password?</a>
+            <a href="#" className="forgot-link" onClick={(e) => { e.preventDefault(); setStep('reset-request'); }}>Forgot your password?</a>
             <button type="submit" className="submit-btn" disabled={isLoading}>
               {isLoading ? 'Signing In...' : 'Sign In'}
             </button>
@@ -382,6 +602,31 @@ const AuthPage = () => {
                     <EyeIcon open={showSignUpPassword} />
                   </button>
                 </div>
+                {signUpPassword && (
+                  <p className={`password-strength-label ${isPasswordStrong(signUpPassword) ? 'strong' : 'weak'}`}>
+                    {getPasswordStrengthLabel(signUpPassword)}
+                  </p>
+                )}
+              </div>
+              <div className="form-group password-group">
+                <label>Confirm Password</label>
+                <div className="password-input-wrapper">
+                  <input
+                    type={showSignUpPassword ? 'text' : 'password'}
+                    value={signUpConfirmPassword}
+                    onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                    disabled={isLoading}
+                  >
+                    <EyeIcon open={showSignUpPassword} />
+                  </button>
+                </div>
               </div>
               <button type="submit" className="submit-btn" disabled={isLoading}>
                 {isLoading ? 'Creating Account...' : 'Sign Up'}
@@ -417,6 +662,177 @@ const AuthPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal: Password Reset Request */}
+      {step === 'reset-request' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-key">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Reset Your Password</h2>
+            <p className="modal-subtitle">
+              Enter your email and we'll send a 6-character reset code.
+            </p>
+
+            <form className="modal-form" onSubmit={handleRequestReset}>
+              {resetError && <div className="modal-error">{resetError}</div>}
+              {resetSuccess && <div className="modal-success">{resetSuccess}</div>}
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="Enter your account email"
+                  required
+                />
+              </div>
+              <button type="submit" className="submit-btn" disabled={isLoading}>
+                {isLoading ? 'Sending Code...' : 'Send Reset Code'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Password Reset Verification */}
+      {step === 'reset-verify' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-shield">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <polyline points="9 12 11 14 15 10" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Enter Reset Code</h2>
+            <p className="modal-subtitle">
+              A 6-character reset code was sent to {resetEmail}.
+            </p>
+
+            <form className="modal-form" onSubmit={handleVerifyResetCode}>
+              {resetError && <div className="modal-error">{resetError}</div>}
+              {resetSuccess && <div className="modal-success">{resetSuccess}</div>}
+
+              <div className="otp-group">
+                {resetCode.map((digit, i) => (
+                  <input
+                    key={i}
+                    id={`reset-code-${i}`}
+                    type="text"
+                    inputMode="text"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleResetCodeChange(i, e.target.value)}
+                    onKeyDown={(e) => handleResetCodeKeyDown(i, e)}
+                    className="otp-input"
+                    autoFocus={i === 0}
+                    aria-label={`Reset code character ${i + 1}`}
+                  />
+                ))}
+              </div>
+
+              <button type="submit" className="submit-btn modal-submit-btn">Verify Code</button>
+            </form>
+            <div className="otp-resend reset-resend">
+              Didn’t receive the reset code?{' '}
+              <button
+                type="button"
+                className="resend-btn"
+                onClick={handleResendResetCode}
+                disabled={resetResendCooldown > 0}
+              >
+                {resetResendCooldown > 0 ? `Resend in ${resetResendCooldown}s` : 'Resend Code'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Password Reset Complete */}
+      {step === 'reset-complete' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-key">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Create New Password</h2>
+            <p className="modal-subtitle">
+              Enter a strong new password and confirm it below.
+            </p>
+
+            <form className="modal-form" onSubmit={handleCompletePasswordReset}>
+              {resetError && <div className="modal-error">{resetError}</div>}
+              {resetSuccess && <div className="modal-success">{resetSuccess}</div>}
+
+              <div className="form-group password-group">
+                <label>New Password</label>
+                <div className="password-input-wrapper">
+                  <input
+                    type={showResetNewPass ? 'text' : 'password'}
+                    value={newResetPassword}
+                    onChange={(e) => setNewResetPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowResetNewPass(!showResetNewPass)}>
+                    <EyeIcon open={showResetNewPass} />
+                  </button>
+                </div>
+                {newResetPassword && (
+                  <p className={`password-strength-label ${isPasswordStrong(newResetPassword) ? 'strong' : 'weak'}`}>
+                    {getPasswordStrengthLabel(newResetPassword)}
+                  </p>
+                )}
+              </div>
+
+              <div className="form-group password-group">
+                <label>Confirm New Password</label>
+                <div className="password-input-wrapper">
+                  <input
+                    type={showResetConfirmPass ? 'text' : 'password'}
+                    value={confirmResetPassword}
+                    onChange={(e) => setConfirmResetPassword(e.target.value)}
+                    placeholder="Re-enter your password"
+                    required
+                  />
+                  <button type="button" className="password-toggle" onClick={() => setShowResetConfirmPass(!showResetConfirmPass)}>
+                    <EyeIcon open={showResetConfirmPass} />
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" className="submit-btn modal-submit-btn">Save New Password</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Password Reset Success */}
+      {step === 'reset-success' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-shield">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Password Updated</h2>
+            <p className="modal-subtitle">
+              Your password has been changed successfully. You can now sign in with your new password.
+            </p>
+            {resetSuccess && <div className="modal-success">{resetSuccess}</div>}
+            <button type="button" className="submit-btn modal-submit-btn" onClick={handleCloseModal}>
+              Back to Sign In
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Set New Password */}
       {step === 'set-password' && (
@@ -489,11 +905,12 @@ const AuthPage = () => {
             </div>
             <h2 className="modal-title">Verify Your Identity</h2>
             <p className="modal-subtitle">
-              A 6-digit verification code has been sent to your registered email or mobile number.
+              A 6-character verification code has been sent to your registered email.
             </p>
 
             <form className="modal-form" onSubmit={handleVerifyOtp}>
               {otpError && <div className="modal-error">{otpError}</div>}
+              {otpMessage && <div className="modal-success">{otpMessage}</div>}
 
               <div className="otp-group">
                 {otp.map((digit, i) => (
@@ -501,13 +918,14 @@ const AuthPage = () => {
                     key={i}
                     id={`otp-${i}`}
                     type="text"
-                    inputMode="numeric"
+                    inputMode="text"
                     maxLength={1}
                     value={digit}
                     onChange={(e) => handleOtpChange(i, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     className="otp-input"
                     autoFocus={i === 0}
+                    aria-label={`OTP character ${i + 1}`}
                   />
                 ))}
               </div>
@@ -516,8 +934,13 @@ const AuthPage = () => {
 
               <div className="otp-resend">
                 Didn't receive a code?{' '}
-                <button type="button" className="resend-btn" onClick={handleResendOtp}>
-                  Resend Code
+                <button
+                  type="button"
+                  className="resend-btn"
+                  onClick={handleResendOtp}
+                  disabled={mfaResendCooldown > 0}
+                >
+                  {mfaResendCooldown > 0 ? `Resend in ${mfaResendCooldown}s` : 'Resend Code'}
                 </button>
               </div>
             </form>

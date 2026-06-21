@@ -579,6 +579,33 @@ body {
   text-align: center;
 }
 
+.modal-success {
+  background-color: #dcfce7;
+  color: #166534;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  border: 1px solid #86efac;
+  width: 100%;
+  text-align: center;
+}
+
+.password-strength-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.password-strength-label.strong {
+  color: #059669;
+}
+
+.password-strength-label.weak {
+  color: #b91c1c;
+}
+
 .modal-submit-btn {
   width: 100%;
   margin-top: 20px;
@@ -663,7 +690,15 @@ body {
   text-underline-offset: 2px;
 }
 
-.resend-btn:hover { color: #0b4bb3; }
+.resend-btn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.resend-btn:hover {
+  color: #0b4bb3;
+}
 
 .modal-back-note {
   margin-top: 20px;

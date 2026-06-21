@@ -127,6 +127,33 @@ export const authService = {
     }
   },
 
+  async sendOtp(email) {
+    try {
+      const response = await apiClient.post("/auth/mfa/send", {
+        email: sanitize(email),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Send OTP error:", error);
+      throw error;
+    }
+  },
+
+  async verifyOtp(email, code, ipAddress, userAgent) {
+    try {
+      const response = await apiClient.post("/auth/mfa/verify", {
+        email: sanitize(email),
+        code: sanitize(code),
+        ipAddress,
+        userAgent,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Verify OTP error:", error);
+      throw error;
+    }
+  },
+
   async signOut() {
     try {
       const sessionToken = localStorage.getItem("sessionToken");
@@ -146,6 +173,45 @@ export const authService = {
       localStorage.removeItem("sessionToken");
       localStorage.removeItem("user");
       localStorage.removeItem("userRole");
+      throw error;
+    }
+  },
+
+  async requestPasswordReset(email) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/request", {
+        email: sanitize(email),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Request password reset error:", error);
+      throw error;
+    }
+  },
+
+  async verifyPasswordResetOtp(email, code) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/verify", {
+        email: sanitize(email),
+        code: sanitize(code),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Verify password reset OTP error:", error);
+      throw error;
+    }
+  },
+
+  async completePasswordReset(email, code, newPassword) {
+    try {
+      const response = await apiClient.post("/auth/password-reset/complete", {
+        email: sanitize(email),
+        code: sanitize(code),
+        newPassword: sanitize(newPassword),
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Complete password reset error:", error);
       throw error;
     }
   },

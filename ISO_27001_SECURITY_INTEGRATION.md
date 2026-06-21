@@ -60,7 +60,7 @@ This document describes the immediate ISO 27001-aligned security controls implem
 ## Recommended Follow-up Controls
 ISO 27001 requires additional controls beyond these immediate improvements:
 
-- Multi-factor authentication (MFA) for admin/faculty accounts.
+- Formalize MFA policy and review `otp_enabled` coverage for privileged accounts.
 - Content Security Policy (CSP) and XSS mitigation in the frontend.
 - Periodic review of audit logs and login reports.
 - Formal access control review for Supabase RLS policies.
@@ -79,7 +79,7 @@ ISO 27001 requires additional controls beyond these immediate improvements:
 | HTTPS enforcement | ✅ Implemented | Production-only HTTPS enforcement |
 | Secure session cookies | ✅ Implemented | `HttpOnly`, `SameSite=Lax`, `Secure` in production |
 | CSRF protection | ✅ Implemented | `csurf` and `XSRF-TOKEN` support added |
-| MFA for admin/faculty | ❌ Not implemented | Recommended for privileged accounts |
+| MFA availability / enforcement | ✅ Implemented | `otp_enabled` users require OTP on sign-in, including newly created accounts |
 | CSP / frontend XSS protection | ✅ Implemented | CSP header added and frontend payloads sanitized |
 | Role-based authorization review | ❌ Not implemented | Supabase RLS and access audit needed |
 | Session idle timeout | ✅ Implemented | 30 minute inactivity timeout enforced and updated on requests |

@@ -2,6 +2,8 @@ const express = require("express");
 const authService = require("../services/authService");
 const securityService = require("../services/securityService");
 const auditService = require("../services/auditService");
+const mfaService = require("../services/mfaService");
+const { supabaseAdmin } = require("../config/supabase");
 
 const router = express.Router();
 
@@ -65,6 +67,33 @@ router.post("/signin", async (req, res) => {
     const result = await authService.signIn(email, password, ipAddress, userAgent);
     await securityService.resetFailedAttempts(email);
 
+    // Check if user has OTP enabled
+    const { data: userRow, error: userErr } = await supabaseAdmin
+      .from("users")
+      .select("id, email, otp_enabled, role")
+      .ilike("email", email)
+      .limit(1)
+      .single();
+
+    if (!userErr && userRow && userRow.otp_enabled) {
+      // Send OTP and return mfaRequired to client
+      await mfaService.sendOtp(userRow.email);
+      await auditService.recordEvent({
+        userId: userRow.id,
+        action: "MFA required - code sent",
+        tableName: "users",
+        recordId: userRow.id,
+      });
+
+      return res.status(200).json({
+        success: true,
+        mfaRequired: true,
+        email: userRow.email,
+        userRole: userRow.role,
+      });
+    }
+
+    // No MFA required: set session cookie and return success
     await auditService.recordEvent({
       userId: result.user.id,
       action: "Successful sign in",
@@ -155,3 +184,4 @@ router.post("/update-password", async (req, res) => {
 });
 
 module.exports = router;
+

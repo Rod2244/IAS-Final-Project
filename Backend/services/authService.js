@@ -37,6 +37,7 @@ const authService = {
           role: normalizedRole,
           status: "Active",
           password_hash: passwordHash,
+          otp_enabled: true,
         })
         .select();
 
@@ -129,7 +130,7 @@ const authService = {
 
       await auditService.recordEvent({
         userId: data.user.id,
-        action: "User sign in",
+        action: "User sign in (password verified)",
         tableName: "users",
         recordId: data.user.id,
         newValues: { ipAddress, userAgent },
@@ -168,6 +169,41 @@ const authService = {
       return { success: true };
     } catch (error) {
       throw new Error(`Sign out error: ${error.message}`);
+    }
+  },
+
+  // Create a session record for a user (used after MFA verification)
+  async createSessionForUser(userId, ipAddress = null, userAgent = null) {
+    try {
+      const sessionToken = generateSessionToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      const { error: sessionError } = await supabaseAdmin
+        .from("sessions")
+        .insert({
+          user_id: userId,
+          token: sessionToken,
+          ip_address: ipAddress || null,
+          user_agent: userAgent || null,
+          expires_at: expiresAt.toISOString(),
+          last_activity: new Date().toISOString(),
+        });
+
+      if (sessionError) {
+        console.warn("Session creation warning:", sessionError);
+      }
+
+      await auditService.recordEvent({
+        userId,
+        action: "Session created (MFA)",
+        tableName: "sessions",
+        recordId: null,
+      });
+
+      return { sessionToken };
+    } catch (err) {
+      console.error("createSessionForUser error", err);
+      return { sessionToken: null };
     }
   },
 
