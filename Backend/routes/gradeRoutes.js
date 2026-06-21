@@ -13,6 +13,22 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Bulk update grades (Add this for the spreadsheet "Save Changes" functionality)
+router.put("/bulk-update", async (req, res) => {
+  try {
+    const { grades } = req.body;
+    if (!Array.isArray(grades)) throw new Error("Grades data must be an array.");
+    
+    const updatedGrades = await Promise.all(
+      grades.map(g => gradeService.updateGrade(g.id, g))
+    );
+    
+    res.status(200).json({ success: true, data: updatedGrades });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Get grades by student
 router.get("/student/:studentId", async (req, res) => {
   try {

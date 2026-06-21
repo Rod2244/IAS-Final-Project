@@ -1,76 +1,146 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../css/managesubs.css';
 
-const initialSubjects = [
-  {
-    id: 1,
-    name: 'Mathematics',
-    icon: '🧮',
-    grade: 'Grade 3',
-    classes: [
-      { name: 'Class A', students: 23 },
-      { name: 'Class B', students: 22 },
-    ],
-  },
-  {
-    id: 2,
-    name: 'English',
-    icon: '✏️',
-    grade: 'Grade 3',
-    classes: [
-      { name: 'Class A', students: 23 },
-      { name: 'Class B', students: 22 },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Science',
-    icon: '🔬',
-    grade: 'Grade 3',
-    classes: [
-      { name: 'Class A', students: 23 },
-      { name: 'Class B', students: 22 },
-    ],
-  },
-];
+// 1. Import React Toastify elements
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+// The URL where your Node.js backend is running
+const API_BASE_URL = 'http://localhost:5000/api';
 
 const ManageSubjects = ({ onOpenClass = () => {} }) => {
+  const [subjects, setSubjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [gradeFilter, setGradeFilter] = useState('All Grades');
   const [classFilter, setClassFilter] = useState('All Classes');
   const [subjectFilter, setSubjectFilter] = useState('All Subjects');
-  const [subjects, setSubjects] = useState(initialSubjects);
+  
+  // Modal Visibility States
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [subjectToDelete, setSubjectToDelete] = useState(null);
+  
   const [formValues, setFormValues] = useState({
     name: '',
     icon: '📘',
     grade: 'Grade 3',
-    sections: [
-      { name: 'Class A', students: '0' },
-    ],
+    sections: [{ name: 'Class A', students: '0' }],
   });
+
+  // --- API BACKEND OPERATIONS ---
+
+  // 1. FETCH ALL SUBJECTS FROM BACKEND
+  const fetchSubjects = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/subjects`);
+      if (!response.ok) throw new Error('Failed to fetch subjects from server.');
+      
+      const data = await response.json();
+      setSubjects(data);
+    } catch (err) {
+      setError(err.message);
+      toast.error(`Error loading database: ${err.message}`, { position: "top-center" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Run fetch when the page loads
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
+
+// 2. SUBMIT NEW SUBJECT & SECTIONS TO BACKEND
+  const handleAddSubject = async (event) => {
+    event.preventDefault();
+    if (!formValues.name.trim()) return;
+
+    const payload = {
+      name: formValues.name.trim(),
+      icon: formValues.icon,
+      grade: formValues.grade,
+      sections: formValues.sections.map((section) => ({
+        name: section.name,
+        students: Number(section.students) || 0,
+      })),
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/subjects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error('Failed to add new subject.');
+
+      // 1. Close the modal first
+      closeAddModal();
+      
+      // 2. Trigger the Centered Success Toast IMMEDIATELY
+      toast.success('Subject added successfully!', { position: "top-center" });
+
+      // 3. Fetch subjects in the background without unmounting the container
+      const fetchResponse = await fetch(`${API_BASE_URL}/subjects`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setSubjects(data);
+      }
+    } catch (err) {
+      toast.error(`Error adding subject: ${err.message}`, { position: "top-center" });
+    }
+  };
+
+  // 3. TRIGGER DELETE MODAL
+  const openDeleteModal = (subject) => {
+    setSubjectToDelete(subject);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setSubjectToDelete(null);
+    setShowDeleteModal(false);
+  };
+
+  // 4. CONFIRM AND EXECUTE DELETE VIA API
+  const handleConfirmDelete = async () => {
+    if (!subjectToDelete) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/subjects/${subjectToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete subject.');
+
+      setSubjects((prev) => prev.filter((item) => item.id !== subjectToDelete.id));
+      closeDeleteModal();
+      toast.success('Subject deleted successfully.', { position: "top-center" });
+    } catch (err) {
+      toast.error(`Error deleting subject: ${err.message}`, { position: "top-center" });
+    }
+  };
+
+  // --- MODAL & FORM HANDLERS ---
 
   const openAddModal = () => {
     setFormValues({
       name: '',
       icon: '📘',
       grade: 'Grade 3',
-      sections: [
-        { name: 'Class A', students: '0' },
-      ],
+      sections: [{ name: 'Class A', students: '0' }],
     });
     setShowAddModal(true);
   };
 
-  const closeAddModal = () => {
-    setShowAddModal(false);
-  };
+  const closeAddModal = () => setShowAddModal(false);
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
-    setFormValues((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSectionChange = (index, event) => {
@@ -97,36 +167,60 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
     }));
   };
 
-  const handleAddSubject = (event) => {
-    event.preventDefault();
-    if (!formValues.name.trim()) return;
+// --- FILTER LOGIC ---
 
-    setSubjects((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        name: formValues.name.trim(),
-        icon: formValues.icon,
-        grade: formValues.grade,
-        classes: formValues.sections.map((section) => ({
-          name: section.name,
-          students: Number(section.students) || 0,
-        })),
-      },
-    ]);
-    closeAddModal();
-  };
+  // 1. Get unique subject names dynamically
+  const uniqueSubjectNames = ['All Subjects', ...new Set(subjects.map(s => s.name || s.subject_name).filter(Boolean))];
 
+  // 2. Get unique grade levels dynamically
+  const uniqueGrades = ['All Grades', ...new Set(subjects.map(s => s.grade || s.grade_level).filter(Boolean))];
+
+  // 3. Extract dynamic class/section names safely from whatever format the backend returns
+  const uniqueClasses = ['All Classes', ...new Set(
+    subjects.reduce((acc, currentSub) => {
+      // Check standard format: subject.classes array
+      if (currentSub.classes && Array.isArray(currentSub.classes)) {
+        currentSub.classes.forEach(c => {
+          const nameToPush = c.name || c.class_name || (c.section_name ? `${c.class_name || ''} ${c.section_name}`.trim() : null);
+          if (nameToPush) acc.push(nameToPush);
+        });
+      }
+      // Fallback check if the backend flattened it down to an assignment row directly
+      if (currentSub.class_name) acc.push(currentSub.class_name);
+      if (currentSub.section_name) acc.push(currentSub.section_name);
+      
+      return acc;
+    }, [])
+  )];
+
+  // 4. Perform multi-layer filtering matches
   const filteredSubjects = subjects.filter((subject) => {
-    const matchesGrade = gradeFilter === 'All Grades' || subject.grade === gradeFilter;
-    const matchesSubject = subjectFilter === 'All Subjects' || subject.name === subjectFilter;
-    const matchesClass =
-      classFilter === 'All Classes' || subject.classes.some((c) => c.name === classFilter);
-    return matchesGrade && matchesSubject && matchesClass;
+    const sName = subject.name || subject.subject_name;
+    const sGrade = subject.grade || subject.grade_level;
+
+    const matchesSubject = subjectFilter === 'All Subjects' || sName === subjectFilter;
+    const matchesGrade = gradeFilter === 'All Grades' || sGrade === gradeFilter;
+    
+    // Evaluate match across classes list variables safely
+    const matchesClass = classFilter === 'All Classes' || 
+      (subject.class_name === classFilter) ||
+      (subject.section_name === classFilter) ||
+      (subject.classes && Array.isArray(subject.classes) && subject.classes.some((c) => {
+        const cName = c.name || c.class_name || c.section_name;
+        return cName === classFilter;
+      }));
+
+    return matchesSubject && matchesGrade && matchesClass;
   });
+
+  if (isLoading) return <div className="manage-subjects"><p>Loading subjects database...</p></div>;
+  if (error) return <div className="manage-subjects"><p style={{ color: 'red' }}>Error: {error}</p></div>;
 
   return (
     <div className="manage-subjects">
+      {/* Toast notifications handler container setup centered */}
+      <ToastContainer autoClose={3000} hideProgressBar={false} />
+
       <div className="page-header">
         <h1>Manage Subjects</h1>
         <button className="btn-primary" onClick={openAddModal}>
@@ -134,37 +228,37 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
         </button>
       </div>
 
+      {/* Filter UI */}
       <div className="filter-section">
         <div className="filter-group">
           <label>Subject:</label>
           <select value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-            <option>All Subjects</option>
-            {subjects.map((subject) => (
-              <option key={subject.id}>{subject.name}</option>
+            {uniqueSubjectNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
             ))}
           </select>
         </div>
+
         <div className="filter-group">
           <label>Grade Level:</label>
           <select value={gradeFilter} onChange={(e) => setGradeFilter(e.target.value)}>
-            <option>All Grades</option>
-            <option>Grade 1</option>
-            <option>Grade 2</option>
-            <option>Grade 3</option>
+            {uniqueGrades.map((grade) => (
+              <option key={grade} value={grade}>{grade}</option>
+            ))}
           </select>
         </div>
+
         <div className="filter-group">
-          <label>Class:</label>
+          <label>Section / Class:</label>
           <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
-            <option>All Classes</option>
-            <option>Class 1A</option>
-            <option>Class 1B</option>
-            <option>Class A</option>
-            <option>Class B</option>
+            {uniqueClasses.map((className) => (
+              <option key={className} value={className}>{className}</option>
+            ))}
           </select>
         </div>
       </div>
 
+      {/* Grid Display */}
       <div className="subjects-grid">
         {filteredSubjects.map((subject) => (
           <div className="subject-card" key={subject.id}>
@@ -176,7 +270,7 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
               </div>
             </div>
             <div className="subject-classes">
-              {subject.classes.map((classInfo) => (
+              {subject.classes && subject.classes.map((classInfo) => (
                 <div
                   className="class-item clickable"
                   key={classInfo.name}
@@ -188,12 +282,12 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
               ))}
             </div>
             <div className="subject-actions">
-              <button className="btn-secondary" onClick={() => onOpenClass(subject.name, subject.classes[0]?.name || '')}>
+              <button className="btn-secondary" onClick={() => onOpenClass(subject.name, subject.classes?.[0]?.name || '')}>
                 Open Class
               </button>
               <button
                 className="btn-secondary"
-                onClick={() => setSubjects((prev) => prev.filter((item) => item.id !== subject.id))}
+                onClick={() => openDeleteModal(subject)}
               >
                 Delete
               </button>
@@ -202,14 +296,13 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
         ))}
       </div>
 
+      {/* Add Modal */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
               <h2>Add New Subject</h2>
-              <button className="modal-close" onClick={closeAddModal}>
-                ✕
-              </button>
+              <button className="modal-close" onClick={closeAddModal}>✕</button>
             </div>
             <form className="subject-form" onSubmit={handleAddSubject}>
               <div className="modal-body">
@@ -284,14 +377,30 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
                 ))}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={closeAddModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Add Subject
-                </button>
+                <button type="button" className="btn-secondary" onClick={closeAddModal}>Cancel</button>
+                <button type="submit" className="btn-primary">Add Subject</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* New Custom Confirmation Delete Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal confirmation-modal">
+            <div className="modal-header">
+              <h2>Confirm Deletion</h2>
+              <button className="modal-close" onClick={closeDeleteModal}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to delete the subject <strong>{subjectToDelete?.name}</strong> and all its assigned classes?</p>
+              <p style={{ color: '#d9534f', fontSize: '14px', marginTop: '8px' }}>⚠️ This action cannot be undone.</p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={closeDeleteModal}>Cancel</button>
+              <button type="button" className="btn-small delete" style={{ padding: '10px 20px', borderRadius: '6px' }} onClick={handleConfirmDelete}>Delete Permanently</button>
+            </div>
           </div>
         </div>
       )}

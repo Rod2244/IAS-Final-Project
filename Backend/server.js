@@ -15,6 +15,7 @@ const gradeRoutes = require("./routes/gradeRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
 const sessionRoutes = require("./routes/sessionRoutes");
 const passwordResetRoutes = require("./routes/passwordResetRoutes");
+const subjectRoutes = require("./routes/subjectRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -107,6 +108,7 @@ app.use("/api/students", studentRoutes);
 app.use("/api/grades", gradeRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/sessions", sessionRoutes);
+app.use("/api/subjects", subjectRoutes);
 
 // 404 Handler
 app.use((req, res) => {
