@@ -28,6 +28,7 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
     grade: 'Grade 3',
     sections: [{ name: 'Class A', students: '0' }],
   });
+  const [csrfToken, setCsrfToken] = useState('');
 
   // --- API BACKEND OPERATIONS ---
 
@@ -53,46 +54,72 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
     fetchSubjects();
   }, []);
 
-// 2. SUBMIT NEW SUBJECT & SECTIONS TO BACKEND
-  const handleAddSubject = async (event) => {
-    event.preventDefault();
-    if (!formValues.name.trim()) return;
-
-    const payload = {
-      name: formValues.name.trim(),
-      icon: formValues.icon,
-      grade: formValues.grade,
-      sections: formValues.sections.map((section) => ({
-        name: section.name,
-        students: Number(section.students) || 0,
-      })),
-    };
-
+  // Add this right next to your existing useEffect inside ManageSubjects.jsx
+  useEffect(() => {
+  const fetchCsrfToken = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/subjects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      // We MUST include credentials here too so the server can drop the initial cookie
+      const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
+        credentials: 'include' 
       });
-
-      if (!response.ok) throw new Error('Failed to add new subject.');
-
-      // 1. Close the modal first
-      closeAddModal();
-      
-      // 2. Trigger the Centered Success Toast IMMEDIATELY
-      toast.success('Subject added successfully!', { position: "top-center" });
-
-      // 3. Fetch subjects in the background without unmounting the container
-      const fetchResponse = await fetch(`${API_BASE_URL}/subjects`);
-      if (fetchResponse.ok) {
-        const data = await fetchResponse.json();
-        setSubjects(data);
+      if (response.ok) {
+        const data = await response.json();
+        setCsrfToken(data.csrfToken);
       }
     } catch (err) {
-      toast.error(`Error adding subject: ${err.message}`, { position: "top-center" });
+      console.error('Failed to load CSRF token:', err);
     }
   };
+  fetchCsrfToken();
+}, []);
+
+// 2. UPDATE YOUR ADD HANDLER
+const handleAddSubject = async (event) => {
+  event.preventDefault();
+  if (!formValues.name.trim()) return;
+
+  const payload = {
+    name: formValues.name.trim(),
+    icon: formValues.icon,
+    grade: formValues.grade,
+    sections: formValues.sections.map((section) => ({
+      name: section.name,
+      students: Number(section.students) || 0,
+    })),
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/subjects`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        // 🔑 Change this line to use the state variable:
+        'X-CSRF-Token': csrfToken 
+      },
+      // 🔑 Ensure this is here so the cookie passes through!
+      credentials: 'include', 
+      body: JSON.stringify(payload),
+    });
+
+if (!response.ok) throw new Error('Failed to add new subject.');
+
+    // 1. Close the modal first
+    closeAddModal();
+    
+    // 2. Trigger the Toast immediately while the UI is still mounted
+    toast.success('Subject added successfully!', { position: "top-center" });
+
+    // 3. Fetch silently in the background without triggering the full screen loader
+    const fetchResponse = await fetch(`${API_BASE_URL}/subjects`);
+    if (fetchResponse.ok) {
+      const data = await fetchResponse.json();
+      setSubjects(data); // This updates the state smoothly without a full unmount
+    }
+
+  } catch (err) {
+    toast.error(`Error adding subject: ${err.message}`, { position: "top-center" });
+  }
+};
 
   // 3. TRIGGER DELETE MODAL
   const openDeleteModal = (subject) => {
@@ -105,24 +132,30 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
     setShowDeleteModal(false);
   };
 
-  // 4. CONFIRM AND EXECUTE DELETE VIA API
-  const handleConfirmDelete = async () => {
-    if (!subjectToDelete) return;
+// 1. UPDATE YOUR DELETE HANDLER
+const handleConfirmDelete = async () => {
+  if (!subjectToDelete) return;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/subjects/${subjectToDelete.id}`, {
-        method: 'DELETE',
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/subjects/${subjectToDelete.id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-Token': csrfToken // Use the token from our state variable
+      },
+      credentials: 'include'
+    });
 
-      if (!response.ok) throw new Error('Failed to delete subject.');
+    if (!response.ok) throw new Error('Failed to delete subject.');
 
-      setSubjects((prev) => prev.filter((item) => item.id !== subjectToDelete.id));
-      closeDeleteModal();
-      toast.success('Subject deleted successfully.', { position: "top-center" });
-    } catch (err) {
-      toast.error(`Error deleting subject: ${err.message}`, { position: "top-center" });
-    }
-  };
+    setSubjects((prev) => prev.filter((item) => item.id !== subjectToDelete.id));
+    closeDeleteModal();
+    toast.success('Subject deleted successfully.', { position: "top-center" });
+  } catch (err) {
+    toast.error(`Error deleting subject: ${err.message}`, { position: "top-center" });
+  }
+};
 
   // --- MODAL & FORM HANDLERS ---
 

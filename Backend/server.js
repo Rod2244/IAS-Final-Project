@@ -38,20 +38,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// CSRF protection - cookie-based token
+// Inside Backend/server.js
 const csrfProtection = csrf({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax", // Lax for local development, Strict for production
     path: "/",
   },
 });
 
-// CORS middleware
+// CORS middleware with explicit HTTP method allowances
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Explicitly allow DELETE
     credentials: true,
   }),
 );
@@ -71,7 +72,7 @@ const authLimiter = rateLimit({
 app.use("/api/auth", authLimiter);
 
 // Apply CSRF protection globally - GET requests skip validation automatically
-app.use(csrfProtection);
+app.use(csrfProtection); 
 
 // Endpoint to get CSRF token - req.csrfToken() available after middleware
 app.get("/api/auth/csrf-token", (req, res) => {

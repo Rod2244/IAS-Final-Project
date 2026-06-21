@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/supabase');
+const authMiddleware = require('../middleware/authMiddleware');
 
 // 1. GET ALL SUBJECTS WITH SECTIONS (Using your junction table)
 router.get('/', async (req, res, next) => {
@@ -77,16 +78,26 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// 3. DELETE A SUBJECT BY ID
+// 3. DELETE A SUBJECT BY ID (Cleans up assignments first)
 router.delete('/:id', async (req, res, next) => {
   const { id } = req.params;
   try {
-    const { error } = await supabase
+    // 1. Clear foreign key assignments first so the DB doesn't block the delete
+    const { error: assignmentError } = await supabase
+      .from('subject_class_assignments')
+      .delete()
+      .eq('subject_id', id);
+
+    if (assignmentError) throw assignmentError;
+
+    // 2. Delete the actual subject row
+    const { error: subjectError } = await supabase
       .from('subjects')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (subjectError) throw subjectError;
+
     res.status(200).json({ message: 'Subject deleted successfully' });
   } catch (error) {
     next(error);
