@@ -55,6 +55,27 @@ router.get("/section/:section", async (req, res) => {
   }
 });
 
+// Create student with auth account (admin endpoint)
+router.post("/admin/create-account", async (req, res) => {
+  try {
+    // Generate a temporary password (12 characters with mix of types)
+    const tempPassword = require("crypto")
+      .randomBytes(8)
+      .toString("base64")
+      .substring(0, 12);
+
+    const studentData = {
+      ...req.body,
+      password: tempPassword, // Add temp password to the student data
+    };
+
+    const result = await studentService.createStudentWithAccount(studentData);
+    res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Create student
 router.post("/", async (req, res) => {
   try {

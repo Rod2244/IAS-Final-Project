@@ -15,7 +15,11 @@ const authService = {
     try {
       const isTeacher = role === "faculty" || role === "teacher";
       const allowedRoles = ["student", "admin"];
-      const normalizedRole = isTeacher ? "admin" : allowedRoles.includes(role) ? role : "student";
+      const normalizedRole = isTeacher
+        ? "admin"
+        : allowedRoles.includes(role)
+          ? role
+          : "student";
 
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email,
@@ -68,7 +72,9 @@ const authService = {
           .from("students")
           .insert({
             user_id: userId,
-            name: `${profileData.firstName || ""} ${profileData.lastName || ""}`.trim() || null,
+            name:
+              `${profileData.firstName || ""} ${profileData.lastName || ""}`.trim() ||
+              null,
             status: "Active",
           });
 
@@ -85,7 +91,9 @@ const authService = {
 
       return { user: data.user, userRecord: userData[0] };
     } catch (error) {
-      throw new Error("Unable to create account. Please verify your details and try again.");
+      throw new Error(
+        "Unable to create account. Please verify your details and try again.",
+      );
     }
   },
 
@@ -141,6 +149,7 @@ const authService = {
         user: data.user,
         userRole: userData.role,
         sessionToken: sessionToken,
+        mustChangePassword: userData.must_change_password || false,
       };
     } catch (error) {
       throw new Error("Invalid login credentials.");

@@ -1,53 +1,164 @@
-import React, { useState } from 'react';
-import '../../css/students.css';
+import React, { useState } from "react";
+import "../../css/students.css";
 
 const initialStudents = [
-  { id: 1, name: 'Juan Dela Cruz', lrn: '2023-001234', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-05-18', gender: 'Male', address: '123 Pine St', parent: 'Ana Dela Cruz', contact: '0917-123-4567', password: 'jd12345' },
-  { id: 2, name: 'Maria Garcia', lrn: '2023-001235', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-07-09', gender: 'Female', address: '45 Oak St', parent: 'Luis Garcia', contact: '0917-234-5678', password: 'mg2023!' },
-  { id: 3, name: 'Jose Reyes', lrn: '2023-001236', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-11-02', gender: 'Male', address: '78 Elm St', parent: 'Gloria Reyes', contact: '0917-345-6789', password: 'jrstudent' },
-  { id: 4, name: 'Ana Santos', lrn: '2023-001237', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-03-22', gender: 'Female', address: '90 Maple St', parent: 'Rogelio Santos', contact: '0917-456-7890', password: 'aspass123' },
-  { id: 5, name: 'Carlos Mendoza', lrn: '2023-001238', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-09-14', gender: 'Male', address: '12 Birch St', parent: 'May Mendoza', contact: '0917-567-8901', password: 'cmportal' },
-  { id: 6, name: 'Elena Rodriguez', lrn: '2023-001239', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-08-01', gender: 'Female', address: '24 Cedar St', parent: 'Jose Rodriguez', contact: '0917-678-9012', password: 'erpass!23' },
-  { id: 7, name: 'Miguel Tan', lrn: '2023-001240', grade: 'Grade 3', class: 'Class A', status: 'Active', dob: '2012-04-11', gender: 'Male', address: '56 Walnut St', parent: 'Lina Tan', contact: '0917-789-0123', password: 'mt2023' },
-  { id: 8, name: 'Sofia Lim', lrn: '2023-001241', grade: 'Grade 3', class: 'Class B', status: 'Active', dob: '2012-10-27', gender: 'Female', address: '34 Cherry St', parent: 'Ellen Lim', contact: '0917-890-1234', password: 'slportal' },
+  {
+    id: 1,
+    name: "Juan Dela Cruz",
+    lrn: "2023-001234",
+    grade: "Grade 3",
+    class: "Class A",
+    status: "Active",
+    dob: "2012-05-18",
+    gender: "Male",
+    address: "123 Pine St",
+    parent: "Ana Dela Cruz",
+    contact: "0917-123-4567",
+    password: "jd12345",
+  },
+  {
+    id: 2,
+    name: "Maria Garcia",
+    lrn: "2023-001235",
+    grade: "Grade 3",
+    class: "Class A",
+    status: "Active",
+    dob: "2012-07-09",
+    gender: "Female",
+    address: "45 Oak St",
+    parent: "Luis Garcia",
+    contact: "0917-234-5678",
+    password: "mg2023!",
+  },
+  {
+    id: 3,
+    name: "Jose Reyes",
+    lrn: "2023-001236",
+    grade: "Grade 3",
+    class: "Class B",
+    status: "Active",
+    dob: "2012-11-02",
+    gender: "Male",
+    address: "78 Elm St",
+    parent: "Gloria Reyes",
+    contact: "0917-345-6789",
+    password: "jrstudent",
+  },
+  {
+    id: 4,
+    name: "Ana Santos",
+    lrn: "2023-001237",
+    grade: "Grade 3",
+    class: "Class B",
+    status: "Active",
+    dob: "2012-03-22",
+    gender: "Female",
+    address: "90 Maple St",
+    parent: "Rogelio Santos",
+    contact: "0917-456-7890",
+    password: "aspass123",
+  },
+  {
+    id: 5,
+    name: "Carlos Mendoza",
+    lrn: "2023-001238",
+    grade: "Grade 3",
+    class: "Class A",
+    status: "Active",
+    dob: "2012-09-14",
+    gender: "Male",
+    address: "12 Birch St",
+    parent: "May Mendoza",
+    contact: "0917-567-8901",
+    password: "cmportal",
+  },
+  {
+    id: 6,
+    name: "Elena Rodriguez",
+    lrn: "2023-001239",
+    grade: "Grade 3",
+    class: "Class B",
+    status: "Active",
+    dob: "2012-08-01",
+    gender: "Female",
+    address: "24 Cedar St",
+    parent: "Jose Rodriguez",
+    contact: "0917-678-9012",
+    password: "erpass!23",
+  },
+  {
+    id: 7,
+    name: "Miguel Tan",
+    lrn: "2023-001240",
+    grade: "Grade 3",
+    class: "Class A",
+    status: "Active",
+    dob: "2012-04-11",
+    gender: "Male",
+    address: "56 Walnut St",
+    parent: "Lina Tan",
+    contact: "0917-789-0123",
+    password: "mt2023",
+  },
+  {
+    id: 8,
+    name: "Sofia Lim",
+    lrn: "2023-001241",
+    grade: "Grade 3",
+    class: "Class B",
+    status: "Active",
+    dob: "2012-10-27",
+    gender: "Female",
+    address: "34 Cherry St",
+    parent: "Ellen Lim",
+    contact: "0917-890-1234",
+    password: "slportal",
+  },
 ];
 
 const Students = () => {
   const [students, setStudents] = useState(initialStudents);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showTempPasswordModal, setShowTempPasswordModal] = useState(false);
+  const [tempPasswordData, setTempPasswordData] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [viewingStudent, setViewingStudent] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
+  const [createAccountChecked, setCreateAccountChecked] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    lrn: '',
-    grade: 'Grade 3',
-    class: 'Class A',
-    status: 'Active',
-    dob: '',
-    gender: '',
-    address: '',
-    parent: '',
-    contact: '',
-    password: '',
+    name: "",
+    lrn: "",
+    email: "",
+    grade: "Grade 3",
+    class: "Class A",
+    status: "Active",
+    dob: "",
+    gender: "",
+    address: "",
+    parent: "",
+    contact: "",
+    password: "",
   });
 
   const openAddModal = () => {
     setEditingStudent(null);
+    setCreateAccountChecked(false);
     setFormData({
-      name: '',
-      lrn: '',
-      grade: 'Grade 3',
-      class: 'Class A',
-      status: 'Active',
-      dob: '',
-      gender: '',
-      address: '',
-      parent: '',
-      contact: '',
-      password: '',
+      name: "",
+      lrn: "",
+      email: "",
+      grade: "Grade 3",
+      class: "Class A",
+      status: "Active",
+      dob: "",
+      gender: "",
+      address: "",
+      parent: "",
+      contact: "",
+      password: "",
     });
     setShowModal(true);
   };
@@ -60,12 +171,12 @@ const Students = () => {
       grade: student.grade,
       class: student.class,
       status: student.status,
-      dob: student.dob || '',
-      gender: student.gender || '',
-      address: student.address || '',
-      parent: student.parent || '',
-      contact: student.contact || '',
-      password: student.password || '',
+      dob: student.dob || "",
+      gender: student.gender || "",
+      address: student.address || "",
+      parent: student.parent || "",
+      contact: student.contact || "",
+      password: student.password || "",
     });
     setShowModal(true);
   };
@@ -84,31 +195,192 @@ const Students = () => {
     }));
   };
 
-  const handleSaveStudent = (event) => {
-    event.preventDefault();
+  // Generate random password
+  const generateRandomPassword = () => {
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const special = "!@#$%^&*";
+    const allChars = uppercase + lowercase + numbers + special;
 
-    if (editingStudent) {
-      setStudents((prev) =>
-        prev.map((student) =>
-          student.id === editingStudent ? { ...student, ...formData } : student
-        )
-      );
-    } else {
-      setStudents((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          ...formData,
-          password: formData.password || 'default123',
-        },
-      ]);
+    let password = "";
+    // Ensure at least one of each type
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+
+    // Fill remaining characters randomly
+    for (let i = password.length; i < 12; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
     }
 
-    closeModal();
+    // Shuffle the password
+    password = password
+      .split("")
+      .sort(() => Math.random() - 0.5)
+      .join("");
+    return password;
+  };
+
+  const handleGeneratePassword = () => {
+    const newPassword = generateRandomPassword();
+    setFormData((prev) => ({
+      ...prev,
+      password: newPassword,
+    }));
+  };
+
+  const handleRegenerateTempPassword = () => {
+    const newPassword = generateRandomPassword();
+    setTempPasswordData((prev) => ({
+      ...prev,
+      tempPassword: newPassword,
+    }));
+  };
+
+  // Helper function to get CSRF token from cookies
+  const getCsrfToken = () => {
+    const name = "XSRF-TOKEN=";
+    const decodedCookie = decodeURIComponent(document.cookie);
+    const cookieArray = decodedCookie.split(";");
+    for (let cookie of cookieArray) {
+      cookie = cookie.trim();
+      if (cookie.indexOf(name) === 0) {
+        return cookie.substring(name.length, cookie.length);
+      }
+    }
+    return "";
+  };
+
+  // Helper function to fetch CSRF token from server
+  const fetchCsrfToken = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/auth/csrf-token",
+        {
+          method: "GET",
+          credentials: "include",
+        },
+      );
+      if (response.ok) {
+        const data = await response.json();
+        return data.csrfToken;
+      }
+    } catch (error) {
+      console.error("Failed to fetch CSRF token:", error);
+    }
+    return "";
+  };
+
+  const handleSaveStudent = async (event) => {
+    event.preventDefault();
+
+    // If creating account, call the API endpoint
+    if (createAccountChecked) {
+      if (!formData.email) {
+        alert("Email is required to create an account");
+        return;
+      }
+
+      setIsCreatingAccount(true);
+      try {
+        // First, try to get token from cookies; if not found, fetch from server
+        let csrfToken = getCsrfToken();
+        if (!csrfToken) {
+          csrfToken = await fetchCsrfToken();
+        }
+        const response = await fetch(
+          "http://localhost:5000/api/students/admin/create-account",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken,
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              name: formData.name,
+              lrn: formData.lrn,
+              email: formData.email,
+              grade: formData.grade,
+              className: formData.class,
+              dateOfBirth: formData.dob,
+              gender: formData.gender,
+              address: formData.address,
+              parentName: formData.parent,
+              parentContact: formData.contact,
+            }),
+          },
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to create student account");
+        }
+
+        // Show temporary password modal
+        setTempPasswordData({
+          name: formData.name,
+          email: formData.email,
+          tempPassword: data.temporaryPassword,
+        });
+        setShowTempPasswordModal(true);
+
+        // Add to local students list
+        setStudents((prev) => [
+          ...prev,
+          {
+            id: data.student.id,
+            name: formData.name,
+            lrn: formData.lrn,
+            grade: formData.grade,
+            class: formData.class,
+            status: "Active",
+            dob: formData.dob,
+            gender: formData.gender,
+            address: formData.address,
+            parent: formData.parent,
+            contact: formData.contact,
+            email: formData.email,
+          },
+        ]);
+
+        closeModal();
+      } catch (error) {
+        alert(`Error creating account: ${error.message}`);
+        console.error("Account creation error:", error);
+      } finally {
+        setIsCreatingAccount(false);
+      }
+    } else {
+      // Original behavior: just update local state without account creation
+      if (editingStudent) {
+        setStudents((prev) =>
+          prev.map((student) =>
+            student.id === editingStudent
+              ? { ...student, ...formData }
+              : student,
+          ),
+        );
+      } else {
+        setStudents((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            ...formData,
+            password: formData.password || "default123",
+          },
+        ]);
+      }
+
+      closeModal();
+    }
   };
 
   const handleDeleteStudent = (id) => {
-    if (window.confirm('Delete this student?')) {
+    if (window.confirm("Delete this student?")) {
       setStudents((prev) => prev.filter((student) => student.id !== id));
     }
   };
@@ -125,7 +397,9 @@ const Students = () => {
   };
 
   const totalStudents = students.length;
-  const activeStudents = students.filter((student) => student.status === 'Active').length;
+  const activeStudents = students.filter(
+    (student) => student.status === "Active",
+  ).length;
   const inactiveStudents = totalStudents - activeStudents;
 
   return (
@@ -166,7 +440,11 @@ const Students = () => {
       <div className="filter-section">
         <div className="filter-group">
           <label>Grade Level:</label>
-          <select name="grade" value={formData.grade} onChange={handleFormChange}>
+          <select
+            name="grade"
+            value={formData.grade}
+            onChange={handleFormChange}
+          >
             <option>All Grades</option>
             <option>Grade 1</option>
             <option>Grade 2</option>
@@ -178,7 +456,11 @@ const Students = () => {
         </div>
         <div className="filter-group">
           <label>Class:</label>
-          <select name="class" value={formData.class} onChange={handleFormChange}>
+          <select
+            name="class"
+            value={formData.class}
+            onChange={handleFormChange}
+          >
             <option>All Classes</option>
             <option>Class A</option>
             <option>Class B</option>
@@ -186,7 +468,11 @@ const Students = () => {
         </div>
         <div className="filter-group">
           <label>Status:</label>
-          <select name="status" value={formData.status} onChange={handleFormChange}>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleFormChange}
+          >
             <option>All Status</option>
             <option>Active</option>
             <option>Inactive</option>
@@ -217,7 +503,10 @@ const Students = () => {
                 <td>
                   <div className="student-cell">
                     <div className="student-avatar-small">
-                      {student.name.split(' ').map((n) => n[0]).join('')}
+                      {student.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
                     </div>
                     <span className="student-name">{student.name}</span>
                   </div>
@@ -225,27 +514,52 @@ const Students = () => {
                 <td>{student.lrn}</td>
                 <td>{student.grade}</td>
                 <td>
-                  <span className={`class-badge-small ${student.class === 'Class A' ? 'class-a' : 'class-b'}`}>
+                  <span
+                    className={`class-badge-small ${student.class === "Class A" ? "class-a" : "class-b"}`}
+                  >
                     {student.class}
                   </span>
                 </td>
                 <td>
-                  <span className={`status-badge ${student.status === 'Active' ? 'active' : 'inactive'}`}>
+                  <span
+                    className={`status-badge ${student.status === "Active" ? "active" : "inactive"}`}
+                  >
                     {student.status}
                   </span>
                 </td>
                 <td>
                   <div className="action-buttons">
-                    <button className="btn-icon" title="View" onClick={() => openViewModal(student)}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <button
+                      className="btn-icon"
+                      title="View"
+                      onClick={() => openViewModal(student)}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
                       </svg>
                     </button>
-                    <button className="btn-icon" title="Edit" onClick={() => openEditModal(student)}>
+                    <button
+                      className="btn-icon"
+                      title="Edit"
+                      onClick={() => openEditModal(student)}
+                    >
                       ✏️
                     </button>
-                    <button className="btn-icon" title="Delete" onClick={() => handleDeleteStudent(student.id)}>
+                    <button
+                      className="btn-icon"
+                      title="Delete"
+                      onClick={() => handleDeleteStudent(student.id)}
+                    >
                       🗑️
                     </button>
                   </div>
@@ -261,8 +575,10 @@ const Students = () => {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h2>{editingStudent ? 'Edit Student' : 'Add New Student'}</h2>
-              <button className="modal-close" onClick={closeModal}>✕</button>
+              <h2>{editingStudent ? "Edit Student" : "Add New Student"}</h2>
+              <button className="modal-close" onClick={closeModal}>
+                ✕
+              </button>
             </div>
             <form className="student-form" onSubmit={handleSaveStudent}>
               <div className="modal-body">
@@ -279,6 +595,39 @@ const Students = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
+                    <label>Email (For Account Creation)</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleFormChange}
+                      placeholder="Enter student email"
+                      disabled={!createAccountChecked}
+                    />
+                  </div>
+                  <div
+                    className="form-group"
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <label style={{ marginBottom: "0" }}>
+                      <input
+                        type="checkbox"
+                        checked={createAccountChecked}
+                        onChange={(e) =>
+                          setCreateAccountChecked(e.target.checked)
+                        }
+                        style={{ marginRight: "0.5rem" }}
+                      />
+                      Create Auth Account
+                    </label>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
                     <label>LRN *</label>
                     <input
                       type="text"
@@ -291,7 +640,12 @@ const Students = () => {
                   </div>
                   <div className="form-group">
                     <label>Status *</label>
-                    <select name="status" value={formData.status} onChange={handleFormChange} required>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleFormChange}
+                      required
+                    >
                       <option>Active</option>
                       <option>Inactive</option>
                     </select>
@@ -300,7 +654,12 @@ const Students = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Grade Level *</label>
-                    <select name="grade" value={formData.grade} onChange={handleFormChange} required>
+                    <select
+                      name="grade"
+                      value={formData.grade}
+                      onChange={handleFormChange}
+                      required
+                    >
                       <option>Grade 1</option>
                       <option>Grade 2</option>
                       <option>Grade 3</option>
@@ -311,7 +670,12 @@ const Students = () => {
                   </div>
                   <div className="form-group">
                     <label>Class *</label>
-                    <select name="class" value={formData.class} onChange={handleFormChange} required>
+                    <select
+                      name="class"
+                      value={formData.class}
+                      onChange={handleFormChange}
+                      required
+                    >
                       <option>Class A</option>
                       <option>Class B</option>
                     </select>
@@ -333,9 +697,20 @@ const Students = () => {
                         type="button"
                         className="btn-password-toggle"
                         onClick={() => setShowEditPassword(!showEditPassword)}
-                        title={showEditPassword ? 'Hide password' : 'Show password'}
+                        title={
+                          showEditPassword ? "Hide password" : "Show password"
+                        }
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           {showEditPassword ? (
                             <>
                               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -353,7 +728,11 @@ const Students = () => {
                   </div>
                   <div className="form-group">
                     <label>Gender</label>
-                    <select name="gender" value={formData.gender} onChange={handleFormChange}>
+                    <select
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleFormChange}
+                    >
                       <option value="">Select Gender</option>
                       <option>Male</option>
                       <option>Female</option>
@@ -363,11 +742,20 @@ const Students = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Date of Birth</label>
-                    <input type="date" name="dob" value={formData.dob} onChange={handleFormChange} />
+                    <input
+                      type="date"
+                      name="dob"
+                      value={formData.dob}
+                      onChange={handleFormChange}
+                    />
                   </div>
                   <div className="form-group">
                     <label>Gender</label>
-                    <select name="gender" value={formData.gender} onChange={handleFormChange}>
+                    <select
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleFormChange}
+                    >
                       <option value="">Select Gender</option>
                       <option>Male</option>
                       <option>Female</option>
@@ -408,11 +796,27 @@ const Students = () => {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={closeModal}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={closeModal}
+                  disabled={isCreatingAccount}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  {editingStudent ? 'Save Changes' : 'Add Student'}
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={
+                    isCreatingAccount ||
+                    (createAccountChecked && !formData.email)
+                  }
+                >
+                  {isCreatingAccount
+                    ? "Creating Account..."
+                    : editingStudent
+                      ? "Save Changes"
+                      : "Add Student"}
                 </button>
               </div>
             </form>
@@ -425,7 +829,9 @@ const Students = () => {
           <div className="modal">
             <div className="modal-header">
               <h2>Student Details</h2>
-              <button className="modal-close" onClick={closeViewModal}>✕</button>
+              <button className="modal-close" onClick={closeViewModal}>
+                ✕
+              </button>
             </div>
             <div className="modal-body">
               <div className="view-section">
@@ -443,7 +849,9 @@ const Students = () => {
                   <div className="view-field">
                     <label>Status</label>
                     <p>
-                      <span className={`status-badge ${viewingStudent.status === 'Active' ? 'active' : 'inactive'}`}>
+                      <span
+                        className={`status-badge ${viewingStudent.status === "Active" ? "active" : "inactive"}`}
+                      >
                         {viewingStudent.status}
                       </span>
                     </p>
@@ -457,7 +865,9 @@ const Students = () => {
                   <div className="view-field">
                     <label>Class</label>
                     <p>
-                      <span className={`class-badge-small ${viewingStudent.class === 'Class A' ? 'class-a' : 'class-b'}`}>
+                      <span
+                        className={`class-badge-small ${viewingStudent.class === "Class A" ? "class-a" : "class-b"}`}
+                      >
                         {viewingStudent.class}
                       </span>
                     </p>
@@ -471,14 +881,27 @@ const Students = () => {
                   <div className="view-field">
                     <label>Student Portal Password</label>
                     <div className="password-display">
-                      <p>{showPassword ? viewingStudent.password : '•'.repeat((viewingStudent.password || '').length)}</p>
+                      <p>
+                        {showPassword
+                          ? viewingStudent.password
+                          : "•".repeat((viewingStudent.password || "").length)}
+                      </p>
                       <button
                         type="button"
                         className="btn-password-toggle"
                         onClick={() => setShowPassword(!showPassword)}
-                        title={showPassword ? 'Hide password' : 'Show password'}
+                        title={showPassword ? "Hide password" : "Show password"}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           {showPassword ? (
                             <>
                               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -520,10 +943,195 @@ const Students = () => {
               </div>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn-secondary" onClick={closeViewModal}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={closeViewModal}
+              >
                 Close
               </button>
-              <button type="button" className="btn-primary" onClick={() => {openEditModal(viewingStudent); closeViewModal();}}>Edit Student</button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  openEditModal(viewingStudent);
+                  closeViewModal();
+                }}
+              >
+                Edit Student
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary Password Modal */}
+      {showTempPasswordModal && tempPasswordData && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: "500px" }}>
+            <div className="modal-header">
+              <h2>✅ Account Created Successfully</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowTempPasswordModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: "1rem 0" }}>
+                <p
+                  style={{
+                    marginBottom: "1.5rem",
+                    color: "#666",
+                    fontSize: "0.95rem",
+                  }}
+                >
+                  A new student account has been created. Please share the
+                  temporary password below with the student. The student will be
+                  required to change this password on their first login.
+                </p>
+
+                <div
+                  style={{
+                    backgroundColor: "#f5f5f5",
+                    padding: "1rem",
+                    borderRadius: "6px",
+                    marginBottom: "1.5rem",
+                  }}
+                >
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <label
+                      style={{
+                        fontWeight: "600",
+                        fontSize: "0.85rem",
+                        color: "#666",
+                      }}
+                    >
+                      Student Name:
+                    </label>
+                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.95rem" }}>
+                      {tempPasswordData.name}
+                    </p>
+                  </div>
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    <label
+                      style={{
+                        fontWeight: "600",
+                        fontSize: "0.85rem",
+                        color: "#666",
+                      }}
+                    >
+                      Email/Username:
+                    </label>
+                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.95rem" }}>
+                      {tempPasswordData.email}
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontWeight: "600",
+                        fontSize: "0.85rem",
+                        color: "#666",
+                      }}
+                    >
+                      Temporary Password:
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        marginTop: "0.25rem",
+                      }}
+                    >
+                      <code
+                        style={{
+                          backgroundColor: "#fff",
+                          padding: "0.5rem 0.75rem",
+                          borderRadius: "4px",
+                          border: "1px solid #ddd",
+                          fontFamily: "monospace",
+                          fontSize: "1rem",
+                          letterSpacing: "0.05em",
+                          flex: 1,
+                        }}
+                      >
+                        {tempPasswordData.tempPassword}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(
+                            tempPasswordData.tempPassword,
+                          );
+                          alert("Password copied to clipboard!");
+                        }}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          backgroundColor: "#007bff",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "600",
+                        }}
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRegenerateTempPassword}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          backgroundColor: "#10b981",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "600",
+                        }}
+                      >
+                        🔄 Generate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: "#fffacd",
+                    padding: "0.75rem",
+                    borderRadius: "4px",
+                    borderLeft: "3px solid #ff9800",
+                    marginBottom: "1.5rem",
+                  }}
+                >
+                  <strong style={{ fontSize: "0.9rem" }}>⚠️ Important:</strong>
+                  <p
+                    style={{
+                      margin: "0.5rem 0 0 0",
+                      fontSize: "0.85rem",
+                      color: "#666",
+                    }}
+                  >
+                    The student must change this password on their first login.
+                    Keep this password secure and share it only with the
+                    student.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setShowTempPasswordModal(false)}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

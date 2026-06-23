@@ -1,4 +1,6 @@
+const bcrypt = require("bcryptjs");
 const { supabaseAdmin } = require("../config/supabase");
+const auditService = require("./auditService");
 
 // Student Service
 const studentService = {
@@ -111,6 +113,97 @@ const studentService = {
       return data;
     } catch (error) {
       throw new Error(`Get students by section error: ${error.message}`);
+    }
+  },
+
+  // Create student with auth account (admin creates account with temporary password)
+  async createStudentWithAccount(studentData) {
+    try {
+      const {
+        email,
+        password,
+        name,
+        lrn,
+        grade,
+        className,
+        dateOfBirth,
+        gender,
+        address,
+        parentName,
+        parentContact,
+        ...otherData
+      } = studentData;
+
+      if (!email || !password) {
+        throw new Error("Email and password are required");
+      }
+
+      // Create Supabase auth user
+      const { data: authData, error: authError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+        });
+
+      if (authError) throw authError;
+
+      const userId = authData.user.id;
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Create user record with must_change_password flag set to true
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from("users")
+        .insert({
+          id: userId,
+          email,
+          role: "student",
+          status: "Active",
+          password_hash: passwordHash,
+          otp_enabled: true,
+          must_change_password: true, // Force password change on first login
+        })
+        .select();
+
+      if (userError) throw userError;
+
+      // Create student record
+      const { data: studentRecord, error: studentError } = await supabaseAdmin
+        .from("students")
+        .insert({
+          user_id: userId,
+          name: name || null,
+          lrn: lrn || null,
+          grade: grade || null,
+          section: className || null,
+          date_of_birth: dateOfBirth || null,
+          gender: gender || null,
+          address: address || null,
+          parent_name: parentName || null,
+          parent_contact: parentContact || null,
+          status: "Active",
+          ...otherData,
+        })
+        .select();
+
+      if (studentError) throw studentError;
+
+      // Audit log
+      await auditService.recordEvent({
+        userId: null,
+        action: "Admin created student account",
+        tableName: "students",
+        recordId: studentRecord[0].id,
+        newValues: { email, name, lrn, mustChangePassword: true },
+      });
+
+      return {
+        success: true,
+        student: studentRecord[0],
+        temporaryPassword: password, // Return temp password to display to admin
+      };
+    } catch (error) {
+      throw new Error(`Create student with account error: ${error.message}`);
     }
   },
 };

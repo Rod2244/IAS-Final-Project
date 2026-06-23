@@ -467,6 +467,35 @@
   color: #0b3a91;
 }
 
+.password-input-wrapper .btn-generate-password {
+  position: absolute;
+  right: 50px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.password-input-wrapper .btn-generate-password:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.password-input-wrapper .btn-generate-password:active {
+  transform: scale(0.98);
+}
+
 /* Student View Details */
 .view-section {
   display: flex;
@@ -539,7 +568,7 @@
   margin: 0;
   font-size: 15px;
   color: #334155;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
 }
 
 .btn-password-toggle {
@@ -587,12 +616,12 @@
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-group,
   .search-box {
     width: 100%;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
@@ -604,24 +633,24 @@
     align-items: flex-start;
     gap: 15px;
   }
-  
+
   .page-header h1 {
     font-size: 24px;
   }
-  
+
   .stats-row {
     grid-template-columns: 1fr;
   }
-  
+
   .students-table {
     font-size: 13px;
   }
-  
+
   .students-table th,
   .students-table td {
     padding: 10px 12px;
   }
-  
+
   .modal {
     margin: 10px;
   }
