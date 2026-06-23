@@ -134,6 +134,8 @@ const studentService = {
         ...otherData
       } = studentData;
 
+      console.log("createStudentWithAccount called with:", { email, password, passwordLength: password?.length, name });
+
       if (!email || !password) {
         throw new Error("Email and password are required");
       }
@@ -146,7 +148,12 @@ const studentService = {
           email_confirm: true,
         });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.log("Supabase auth user creation error:", authError);
+        throw authError;
+      }
+
+      console.log("Supabase auth user created successfully:", { userId: authData.user.id, email });
 
       const userId = authData.user.id;
       const passwordHash = await bcrypt.hash(password, 10);

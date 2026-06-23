@@ -1,4 +1,5 @@
 import React from 'react';
+import { Users, Book, FileText, CheckCircle } from 'lucide-react';
 import '../../css/Dashboard.css';
 
 const Dashboard = () => {
@@ -12,7 +13,7 @@ const Dashboard = () => {
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon blue">
-            <span>👨‍🎓</span>
+            <Users size={32} />
           </div>
           <div className="stat-info">
             <h3>Total Students</h3>
@@ -22,7 +23,7 @@ const Dashboard = () => {
 
         <div className="stat-card">
           <div className="stat-icon green">
-            <span>📚</span>
+            <Book size={32} />
           </div>
           <div className="stat-info">
             <h3>Subjects</h3>
@@ -32,7 +33,7 @@ const Dashboard = () => {
 
         <div className="stat-card">
           <div className="stat-icon purple">
-            <span>📝</span>
+            <FileText size={32} />
           </div>
           <div className="stat-info">
             <h3>Classes</h3>
@@ -42,7 +43,7 @@ const Dashboard = () => {
 
         <div className="stat-card">
           <div className="stat-icon orange">
-            <span>✅</span>
+            <CheckCircle size={32} />
           </div>
           <div className="stat-info">
             <h3>Grades Submitted</h3>

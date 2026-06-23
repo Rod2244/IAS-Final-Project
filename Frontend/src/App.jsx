@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import Layout from "./components/Layout";
 import Dashboard from "./Adminpages/Dashboard";
 import ManageSubjects from "./Adminpages/managesubjects";
@@ -19,17 +21,19 @@ const ProtectedRoute = ({ element, isAuthenticated }) => {
 const LayoutWrapper = () => {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState(""); 
   const [selectedSection, setSelectedSection] = useState("");
 
-  const renderPage = () => {
+const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
         return <Dashboard />;
       case "subjects":
         return (
           <ManageSubjects
-            onOpenClass={(subject, section) => {
-              setSelectedSubject(subject);
+            onOpenClass={(subjectName, subjectId, section) => { 
+              setSelectedSubject(subjectName);
+              setSelectedSubjectId(subjectId); 
               setSelectedSection(section || "Class A");
               setCurrentPage("viewgrades");
             }}
@@ -43,6 +47,7 @@ const LayoutWrapper = () => {
         return (
           <ViewGrades
             selectedSubject={selectedSubject}
+            selectedSubjectId={selectedSubjectId}
             selectedSection={selectedSection}
             onBack={() => setCurrentPage("subjects")}
           />
@@ -79,6 +84,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ToastContainer position="top-center" autoClose={3000} />
       <Routes>
         <Route path="/login" element={<AuthPage />} />
         <Route path="/auth" element={<AuthPage />} />

@@ -96,7 +96,9 @@ const mfaService = {
 
       const code = generateOtpCode();
       const codeHash = hashCode(code);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+      console.log("Generated OTP code:", code, "with hash:", codeHash, "for user:", user.email);
 
       // Insert the new OTP record first
       const { data: insertData, error: insertErr } = await supabaseAdmin.from("user_otps").insert({
@@ -138,10 +140,13 @@ const mfaService = {
       }
 
       const subject = purpose === "password_reset" ? "Password reset code" : "Your verification code";
-      const html = `<p>Your ${purpose === "password_reset" ? "password reset" : "verification"} code is <strong>${code}</strong>. It expires in 5 minutes.</p>`;
+      const html = `<p>Your ${purpose === "password_reset" ? "password reset" : "verification"} code is <strong>${code}</strong>. It expires in 10 minutes.</p>`;
+
+      console.log("Sending email with code:", code, "for user:", user.email, "hash:", codeHash);
 
       try {
         await sendEmailViaBrevo(user.email, subject, html);
+        console.log("Email sent successfully with code:", code);
       } catch (emailErr) {
         console.warn("Brevo send error:", emailErr.message || emailErr);
         // Don't expose to client
@@ -165,6 +170,7 @@ const mfaService = {
   // Verify OTP for email; returns user object on success
   async verifyOtp(email, code, purpose = "mfa") {
     try {
+      console.log("verifyOtp called with:", { email, code, purpose });
       const { data: user, error: userError } = await supabaseAdmin
         .from("users")
         .select("id, email, otp_enabled, role")
@@ -173,12 +179,19 @@ const mfaService = {
         .single();
 
       if (userError || !user) {
+        console.log("User lookup failed:", userError);
         return { verified: false };
       }
 
-      if (purpose !== "password_reset" && !user.otp_enabled) return { verified: false };
+      console.log("User found:", { id: user.id, email: user.email, otp_enabled: user.otp_enabled, role: user.role });
+
+      if (purpose !== "password_reset" && !user.otp_enabled) {
+        console.log("OTP not enabled for user");
+        return { verified: false };
+      }
 
       const codeHash = hashCode(code);
+      console.log("Code hash:", codeHash);
 
       const { data: otpRow, error: otpErr } = await supabaseAdmin
         .from("user_otps")
@@ -191,9 +204,17 @@ const mfaService = {
         .limit(1)
         .single();
 
-      if (otpErr || !otpRow) return { verified: false };
+      if (otpErr || !otpRow) {
+        console.log("OTP lookup failed:", otpErr);
+        return { verified: false };
+      }
+
+      console.log("OTP row found:", { id: otpRow.id, expires_at: otpRow.expires_at, used: otpRow.used, stored_hash: otpRow.code_hash });
+      console.log("Computed hash:", codeHash);
+      console.log("Hash comparison:", { match: otpRow.code_hash === codeHash, stored: otpRow.code_hash, computed: codeHash });
 
       if (otpRow.code_hash !== codeHash) {
+        console.log("Code hash mismatch");
         return { verified: false };
       }
 
@@ -207,6 +228,7 @@ const mfaService = {
         recordId: otpRow.id,
       });
 
+      console.log("OTP verified successfully");
       return { verified: true, user };
     } catch (err) {
       console.error("verifyOtp error", err);

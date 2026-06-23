@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import "../../css/students.css";
 
 const initialStudents = [
@@ -279,7 +281,7 @@ const Students = () => {
     // If creating account, call the API endpoint
     if (createAccountChecked) {
       if (!formData.email) {
-        alert("Email is required to create an account");
+        toast.error("Email is required to create an account");
         return;
       }
 
@@ -349,7 +351,7 @@ const Students = () => {
 
         closeModal();
       } catch (error) {
-        alert(`Error creating account: ${error.message}`);
+        toast.error(`Error creating account: ${error.message}`);
         console.error("Account creation error:", error);
       } finally {
         setIsCreatingAccount(false);
@@ -382,6 +384,7 @@ const Students = () => {
   const handleDeleteStudent = (id) => {
     if (window.confirm("Delete this student?")) {
       setStudents((prev) => prev.filter((student) => student.id !== id));
+      toast.success("Student deleted successfully");
     }
   };
 
@@ -668,18 +671,6 @@ const Students = () => {
                       <option>Grade 6</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>Class *</label>
-                    <select
-                      name="class"
-                      value={formData.class}
-                      onChange={handleFormChange}
-                      required
-                    >
-                      <option>Class A</option>
-                      <option>Class B</option>
-                    </select>
-                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -748,18 +739,6 @@ const Students = () => {
                       value={formData.dob}
                       onChange={handleFormChange}
                     />
-                  </div>
-                  <div className="form-group">
-                    <label>Gender</label>
-                    <select
-                      name="gender"
-                      value={formData.gender}
-                      onChange={handleFormChange}
-                    >
-                      <option value="">Select Gender</option>
-                      <option>Male</option>
-                      <option>Female</option>
-                    </select>
                   </div>
                 </div>
                 <div className="form-group">
@@ -1065,7 +1044,7 @@ const Students = () => {
                           navigator.clipboard.writeText(
                             tempPasswordData.tempPassword,
                           );
-                          alert("Password copied to clipboard!");
+                          toast.success("Password copied to clipboard!");
                         }}
                         style={{
                           padding: "0.5rem 1rem",

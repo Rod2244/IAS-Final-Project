@@ -6,7 +6,14 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBack }) => {
   const [sectionsList, setSectionsList] = useState([]);
+  
+  // 1. Initialize activeTab state FIRST
   const [activeTab, setActiveTab] = useState(selectedSection || '');
+
+  // 2. Safely run the find operation AFTER activeTab is initialized
+  const activeClassId = sectionsList.find(s => s.name === activeTab)?.id || null;
+  
+  // 3. Declare the rest of your states
   const [grades, setGrades] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -17,38 +24,51 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
   
   // Student Modal Toggle States
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [newStudent, setNewStudent] = useState({
-    name: '',
-    q1_grade: '',
-    q2_grade: '',
-    q3_grade: '',
-    q4_grade: '',
-  });
+  const [newStudent, setNewStudent] = useState({ name: '' });
 
-  // 1. FETCH ASSIGNED SECTIONS FOR THIS SUBJECT
- useEffect(() => {
+  // --- STATE FOR ENROLLED STUDENTS LIST ---
+  const [enrolledStudents, setEnrolledStudents] = useState([]); 
+  const [csrfToken, setCsrfToken] = useState(''); // 🔑 Add this state
+
+  useEffect(() => {
+    const fetchCsrfToken = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
+          credentials: 'include' 
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCsrfToken(data.csrfToken);
+        }
+      } catch (err) {
+        console.error('Failed to load CSRF token:', err);
+      }
+    };
+    fetchCsrfToken();
+  }, []);
+
+// 1. FETCH ASSIGNED SECTIONS FOR THIS SUBJECT
+  useEffect(() => {
     const fetchSections = async () => {
       try {
         setIsLoading(true);
         const res = await fetch(`${API_BASE_URL}/subjects/${selectedSubjectId || selectedSubject}/sections`);
         
-        if (!res.ok) throw new Error('Route not found or database mismatch');
+        if (!res.ok) throw new Error('Failed to fetch sections');
         
-        const data = await res.json();
+        const data = await res.json(); // Expected format: [{ id: "...", name: "..." }, ...]
+        console.log("Backend sections response:", data);
+        
         setSectionsList(data);
         
-        if (data.length > 0) {
-          const initialTab = data.find(s => s.name === selectedSection) || data[0];
-          setActiveTab(initialTab.name || initialTab.class_name);
+        if (data && data.length > 0) {
+          // Fallback to selectedSection or the first item's name
+          setActiveTab(selectedSection || data[0].name || 'Class A');
         }
       } catch (err) {
-        // Fallback: If backend 404s, explicitly build tabs out of what the user clicked
-        console.log("Using local tabs fallback layout due to missing backend endpoint.");
-        setSectionsList([
-          { id: '1', name: selectedSection || 'Class A' },
-          { id: '2', name: 'Class B' }
-        ]);
-        setActiveTab(selectedSection || 'Class A');
+        console.error("Error loading sections:", err);
+        // Do not use arbitrary fallbacks that lack real UUIDs
+        setSectionsList([]);
       } finally {
         setIsLoading(false);
       }
@@ -58,33 +78,50 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
   }, [selectedSubject, selectedSection, selectedSubjectId]);
 
   // 2. FETCH GRADES FOR THE ACTIVE CLASS SECTION
-const fetchClassGrades = async () => {
+  const fetchClassGrades = async () => {
     if (!activeTab) return;
     try {
-      // Fallback strategy: try fetching filtered list if direct route fails
       const res = await fetch(`${API_BASE_URL}/grades`);
       if (res.ok) {
         const json = await res.json();
         const allGrades = json.data || [];
         
-        // Filter grades locally to avoid backend 400 parameter type errors
         const filtered = allGrades.filter(g => 
           (g.class_name === activeTab || g.class_id === activeTab) && 
           (g.subject_name === selectedSubject)
         );
         
-        // If your database currently has NO rows matching, let's inject empty array safely
         setGrades(filtered);
       }
     } catch (err) {
       console.error('Error fetching grades:', err);
-      setGrades([]); // clear on fail to prevent UI breakage
+      setGrades([]);
     }
   };
 
   useEffect(() => {
     fetchClassGrades();
   }, [activeTab, selectedSubject]);
+
+  // 3. Fetch students assigned to this specific grade/section when the modal opens
+  useEffect(() => {
+    const fetchEnrolledStudents = async () => {
+      try {
+        // Calls your /api/students endpoint filtering dynamically by Grade Level and Section Name
+        const response = await fetch(`${API_BASE_URL}/students?grade=${selectedSubject || ''}&section=${activeTab}`);
+        if (response.ok) {
+          const data = await response.json();
+          setEnrolledStudents(Array.isArray(data) ? data : data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to load enrolled students:", err);
+      }
+    };
+    
+    if (showAddStudentModal && activeTab) {
+      fetchEnrolledStudents();
+    }
+  }, [showAddStudentModal, activeTab, selectedSubject]);
 
   // --- ARITHMETIC UTILITIES ---
   const calculateDerivedValues = (student) => {
@@ -134,8 +171,8 @@ const fetchClassGrades = async () => {
     if (e.key === 'Escape') setEditingCell(null);
   };
 
-  // --- SAVE OPERATION (BULK PUT / POST) ---
-const handleBulkSaveChanges = async () => {
+  // --- SAVE OPERATION ---
+  const handleBulkSaveChanges = async () => {
     try {
       setIsSaving(true);
       const response = await fetch(`${API_BASE_URL}/grades/bulk-update`, {
@@ -155,7 +192,7 @@ const handleBulkSaveChanges = async () => {
 
   // --- ADD STUDENT HANDLERS ---
   const openAddStudentModal = () => {
-    setNewStudent({ name: '', q1_grade: '', q2_grade: '', q3_grade: '', q4_grade: '' });
+    setNewStudent({ name: '' });
     setShowAddStudentModal(true);
   };
 
@@ -166,58 +203,56 @@ const handleBulkSaveChanges = async () => {
     setNewStudent(prev => ({ ...prev, [name]: value }));
   };
 
+ // Inside viewgrades.jsx (handleAddStudentSubmit)
 const handleAddStudentSubmit = async (e) => {
-    e.preventDefault();
-    
-    // 1. Safely grab the text name entered in the modal input form
-    const name = newStudent.name ? newStudent.name.trim() : "";
-    if (!name) return;
+  e.preventDefault();
 
-    // 2. Parse quarterly grades into plain numeric formats
-    const q1 = parseFloat(newStudent.q1_grade) || 0;
-    const q2 = parseFloat(newStudent.q2_grade) || 0;
-    const q3 = parseFloat(newStudent.q3_grade) || 0;
-    const q4 = parseFloat(newStudent.q4_grade) || 0;
-    
-    const calculatedAverage = parseFloat(((q1 + q2 + q3 + q4) / 4).toFixed(2));
-    const finalRemarks = calculatedAverage >= 75 ? 'Passed' : 'Failed';
+  if (!activeClassId) {
+    toast.error("Please ensure a valid section/class is assigned to this subject first.", { position: "top-center" });
+    return;
+  }
+    const studentName = newStudent.name ? newStudent.name.trim() : "";
+    if (!studentName) return;
 
-    // 3. Build text-descriptive payload so the backend service resolves real entity UUIDs
     const payload = {
-      student_name: name,
-      subject_name: selectedSubject || "Math", 
+      student_name: studentName,
+      subject_name: selectedSubject || "Scienceeeee", 
       class_name: activeTab || "Class A",
-      
-      // Match explicit column types for your schema
-      preliminary_grade: q1,
-      midterm_grade: q2,
-      final_grade: q3,
-      fourth_period_grade: q4,
-      average_grade: calculatedAverage,
-      remarks: finalRemarks,
+      class_id: activeClassId, 
+      subject_id: selectedSubjectId,
+      preliminary_grade: 0,
+      midterm_grade: 0,
+      final_grade: 0,
+      fourth_period_grade: 0,
+      average_grade: 0,
+      remarks: "Failed",
       school_year: "2026-2027",
       grading_period: "1st Semester"
     };
 
     try {
+      console.log("Submitting student payload:", { studentName, activeTab, selectedSubjectId });
       const response = await fetch(`${API_BASE_URL}/grades`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken // 🔑 ATTACH CSRF TOKEN
+        },
+        credentials: 'include', // 🔑 INCLUDE CREDENTIALS SESSION
         body: JSON.stringify(payload),
       });
 
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json.error || 'Could not add student entry.');
+        throw new Error(json.error || 'Could not assign student entry.');
       }
       
-      toast.success('Student added successfully! 🎉', { position: 'top-center' });
+      toast.success('Student assigned to subject successfully!', { position: 'top-center' });
       
-      // 4. Append the database record directly to your local grid array list state
       const addedRow = {
         id: json.data?.id || crypto.randomUUID(),
-        student_name: name,
+        student_name: studentName,
         ...payload
       };
       
@@ -241,7 +276,7 @@ const handleAddStudentSubmit = async (e) => {
     }
   };
 
-  // --- PRESENTATION RENDERING RENDERER ---
+  // --- PRESENTATION RENDERING ---
   const renderCell = (student, databaseField, localFallbackField) => {
     const activeField = student[databaseField] !== undefined ? databaseField : localFallbackField;
     const value = student[activeField] ?? 0;
@@ -311,10 +346,11 @@ const handleAddStudentSubmit = async (e) => {
       <div className="tabs-container">
         <div className="tabs">
           {sectionsList.map((section) => {
-            const sectionName = section.name || section.class_name;
+            // 🔑 Standardize reading the name whether it comes as name, class_name, or section_name
+            const sectionName = section.name || section.class_name || section.section_name || 'Class A';
             return (
               <button
-                key={section.id}
+                key={section.id || sectionName}
                 className={`tab ${activeTab === sectionName ? 'active' : ''}`}
                 onClick={() => setActiveTab(sectionName)}
               >
@@ -338,29 +374,37 @@ const handleAddStudentSubmit = async (e) => {
           </div>
         </div>
 
+        {/* Add Student Modal */}
         {showAddStudentModal && (
           <div className="modal-overlay">
             <div className="modal">
               <div className="modal-header">
-                <h2>Add New Student Entry</h2>
+                <h2>Add Student to Class</h2>
                 <button className="modal-close" onClick={closeAddStudentModal}>✕</button>
               </div>
-              <form className="student-modal-form" onSubmit={handleAddStudentSubmit}>
+              <form onSubmit={handleAddStudentSubmit}>
                 <div className="modal-body">
                   <div className="form-group">
-                    <label>Student Full Name</label>
-                    <input type="text" name="name" value={newStudent.name} onChange={handleNewStudentChange} required placeholder="Last Name, First Name" />
+                    <label>Select Student by Name (Enrolled in {activeTab})</label>
+                    <select 
+                      name="name" 
+                      value={newStudent.name} 
+                      onChange={handleNewStudentChange} 
+                      required
+                    >
+                      <option value="">-- Select a student --</option>
+                      {enrolledStudents.map((stu) => (
+                        <option key={stu.id} value={stu.name}>{stu.name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="form-row">
-                    <div className="form-group"><label>1st Quarter</label><input type="number" min="0" max="100" name="q1_grade" value={newStudent.q1_grade} onChange={handleNewStudentChange} required /></div>
-                    <div className="form-group"><label>2nd Quarter</label><input type="number" min="0" max="100" name="q2_grade" value={newStudent.q2_grade} onChange={handleNewStudentChange} required /></div>
-                    <div className="form-group"><label>3rd Quarter</label><input type="number" min="0" max="100" name="q3_grade" value={newStudent.q3_grade} onChange={handleNewStudentChange} required /></div>
-                    <div className="form-group"><label>4th Quarter</label><input type="number" min="0" max="100" name="q4_grade" value={newStudent.q4_grade} onChange={handleNewStudentChange} required /></div>
-                  </div>
+                  <p style={{fontSize: '13px', color: '#666'}}>
+                    Note: Students appearing here belong to the Grade Level associated with this subject and section "<strong>{activeTab}</strong>".
+                  </p>
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn-secondary" onClick={closeAddStudentModal}>Cancel</button>
-                  <button type="submit" className="btn-primary">Add Student</button>
+                  <button type="submit" className="btn-primary">Assign to Subject</button>
                 </div>
               </form>
             </div>

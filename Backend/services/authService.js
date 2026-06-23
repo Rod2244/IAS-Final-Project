@@ -100,12 +100,16 @@ const authService = {
   // Sign in user
   async signIn(email, password, ipAddress = null, userAgent = null) {
     try {
+      console.log("signIn called with:", { email, password, passwordLength: password?.length });
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.log("Supabase auth error:", error);
+        throw error;
+      }
 
       // Get user role
       const { data: userData, error: userError } = await supabase

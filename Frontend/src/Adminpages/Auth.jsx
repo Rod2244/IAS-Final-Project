@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import "../../css/Auth.css";
 import bg from "../assets/background.jpg";
 import logo from "../assets/UniversityAuthlogo.png";
@@ -456,12 +458,29 @@ const AuthPage = () => {
 
     try {
       setIsLoading(true);
+      // Get CSRF token
+      let csrfToken = document.cookie
+        .split(";")
+        .map((c) => c.trim())
+        .find((c) => c.startsWith("XSRF-TOKEN="));
+      if (csrfToken) {
+        csrfToken = csrfToken.split("=")[1];
+      } else {
+        // Fetch CSRF token if not in cookie
+        const csrfResponse = await fetch("http://localhost:5000/api/auth/csrf-token", {
+          credentials: "include",
+        });
+        const csrfData = await csrfResponse.json();
+        csrfToken = csrfData.csrfToken;
+      }
+
       const response = await fetch(
         "http://localhost:5000/api/auth/change-password",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken,
           },
           credentials: "include",
           body: JSON.stringify({
@@ -539,17 +558,29 @@ const AuthPage = () => {
         );
 
         if (response.success) {
+          console.log("OTP verification successful, response:", response);
+          // Set authToken to mark user as authenticated
+          localStorage.setItem("authToken", "authenticated");
+          // Show success toast
+          toast.success("Code verification successful. Redirecting you to dashboard...");
           // Check if user must change password after MFA verification
           if (localStorage.getItem("mustChangePassword") === "true") {
+            console.log("Must change password, showing password change modal");
             setStep("set-password");
             return;
           }
 
           const role =
             response.userRole || localStorage.getItem("userRole") || "student";
+          console.log("Navigating with role:", role);
           localStorage.setItem("userRole", role);
-          if (role === "student") navigate("/student");
-          else navigate("/dashboard");
+          if (role === "student") {
+            console.log("Navigating to /student");
+            navigate("/student");
+          } else {
+            console.log("Navigating to /dashboard");
+            navigate("/dashboard");
+          }
         } else {
           setOtpError(response.error || "Invalid code. Please try again.");
         }
