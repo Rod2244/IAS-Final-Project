@@ -366,6 +366,7 @@ router.post("/signin", async (req, res) => {
       user: result.user,
       userRole: result.userRole,
       sessionToken: result.sessionToken,
+      mustChangePassword: result.mustChangePassword || false,
     });
   } catch (error) {
     const lockResult = await securityService.recordFailedAttempt(

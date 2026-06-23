@@ -123,13 +123,26 @@ const Students = () => {
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showTempPasswordModal, setShowTempPasswordModal] = useState(false);
+  const [showGradesModal, setShowGradesModal] = useState(false);
   const [tempPasswordData, setTempPasswordData] = useState(null);
   const [editingStudent, setEditingStudent] = useState(null);
   const [viewingStudent, setViewingStudent] = useState(null);
+  const [editingStudentForGrades, setEditingStudentForGrades] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [createAccountChecked, setCreateAccountChecked] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [gradesData, setGradesData] = useState({
+    philippine_history: { q1: "", q2: "", q3: "", q4: "" },
+    filipino: { q1: "", q2: "", q3: "", q4: "" },
+    gmrc: { q1: "", q2: "", q3: "", q4: "" },
+    language: { q1: "", q2: "", q3: "", q4: "" },
+    literature: { q1: "", q2: "", q3: "", q4: "" },
+    makabansa: { q1: "", q2: "", q3: "", q4: "" },
+    math: { q1: "", q2: "", q3: "", q4: "" },
+    reading: { q1: "", q2: "", q3: "", q4: "" },
+    remarks: "",
+  });
   const [formData, setFormData] = useState({
     name: "",
     lrn: "",
@@ -399,6 +412,157 @@ const Students = () => {
     setShowPassword(false);
   };
 
+  const openGradesModal = (student) => {
+    setEditingStudentForGrades(student);
+    setGradesData({
+      philippine_history: { q1: "", q2: "", q3: "", q4: "" },
+      filipino: { q1: "", q2: "", q3: "", q4: "" },
+      gmrc: { q1: "", q2: "", q3: "", q4: "" },
+      language: { q1: "", q2: "", q3: "", q4: "" },
+      literature: { q1: "", q2: "", q3: "", q4: "" },
+      makabansa: { q1: "", q2: "", q3: "", q4: "" },
+      math: { q1: "", q2: "", q3: "", q4: "" },
+      reading: { q1: "", q2: "", q3: "", q4: "" },
+      remarks: "",
+    });
+    setShowGradesModal(true);
+  };
+
+  const closeGradesModal = () => {
+    setShowGradesModal(false);
+    setEditingStudentForGrades(null);
+    setGradesData({
+      philippine_history: { q1: "", q2: "", q3: "", q4: "" },
+      filipino: { q1: "", q2: "", q3: "", q4: "" },
+      gmrc: { q1: "", q2: "", q3: "", q4: "" },
+      language: { q1: "", q2: "", q3: "", q4: "" },
+      literature: { q1: "", q2: "", q3: "", q4: "" },
+      makabansa: { q1: "", q2: "", q3: "", q4: "" },
+      math: { q1: "", q2: "", q3: "", q4: "" },
+      reading: { q1: "", q2: "", q3: "", q4: "" },
+      remarks: "",
+    });
+  };
+
+  const handleGradesChange = (event) => {
+    const { name, value } = event.target;
+    setGradesData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSaveGrades = async (event) => {
+    event.preventDefault();
+
+    // Validate that at least one subject has all quarters filled
+    const subjectsToSave = [];
+    const subjectNames = [
+      "Filipino",
+      "GMRC",
+      "Language",
+      "Literature",
+      "Makabansa",
+      "Math",
+      "Reading",
+    ];
+    const subjectKeys = [
+      "filipino",
+      "gmrc",
+      "language",
+      "literature",
+      "makabansa",
+      "math",
+      "reading",
+    ];
+
+    for (let i = 0; i < subjectKeys.length; i++) {
+      const key = subjectKeys[i];
+      const grades = gradesData[key];
+
+      // Check if any quarter has a value
+      if (grades.q1 || grades.q2 || grades.q3 || grades.q4) {
+        // If any quarter is filled, all must be filled
+        if (!grades.q1 || !grades.q2 || !grades.q3 || !grades.q4) {
+          toast.error(`${subjectNames[i]}: All quarterly grades are required`);
+          return;
+        }
+
+        // Validate grades are 0-100
+        const q1 = parseFloat(grades.q1);
+        const q2 = parseFloat(grades.q2);
+        const q3 = parseFloat(grades.q3);
+        const q4 = parseFloat(grades.q4);
+
+        if (
+          isNaN(q1) ||
+          isNaN(q2) ||
+          isNaN(q3) ||
+          isNaN(q4) ||
+          q1 < 0 ||
+          q1 > 100 ||
+          q2 < 0 ||
+          q2 > 100 ||
+          q3 < 0 ||
+          q3 > 100 ||
+          q4 < 0 ||
+          q4 > 100
+        ) {
+          toast.error(`${subjectNames[i]}: Grades must be between 0-100`);
+          return;
+        }
+
+        const average = ((q1 + q2 + q3 + q4) / 4).toFixed(2);
+        subjectsToSave.push({
+          subject: subjectNames[i],
+          q1: q1,
+          q2: q2,
+          q3: q3,
+          q4: q4,
+          average: average,
+        });
+      }
+    }
+
+    if (subjectsToSave.length === 0) {
+      toast.error("Please enter grades for at least one subject");
+      return;
+    }
+
+    try {
+      // Save all grades at once
+      const response = await fetch("http://localhost:5000/api/grades/batch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          student_id: editingStudentForGrades.id,
+          student_name: editingStudentForGrades.name,
+          class_name: editingStudentForGrades.class,
+          grade_level: editingStudentForGrades.grade,
+          grades: subjectsToSave,
+          remarks: gradesData.remarks || "Completed",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save grades");
+      }
+
+      toast.success(
+        `Grades saved for ${editingStudentForGrades.name} (${subjectsToSave.length} subjects)`,
+      );
+      closeGradesModal();
+    } catch (error) {
+      toast.error(`Error saving grades: ${error.message}`);
+      console.error("Grades save error:", error);
+    }
+  };
+
   const totalStudents = students.length;
   const activeStudents = students.filter(
     (student) => student.status === "Active",
@@ -550,6 +714,13 @@ const Students = () => {
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
                       </svg>
+                    </button>
+                    <button
+                      className="btn-icon"
+                      title="Edit Grades"
+                      onClick={() => openGradesModal(student)}
+                    >
+                      📊
                     </button>
                     <button
                       className="btn-icon"
@@ -1112,6 +1283,307 @@ const Students = () => {
                 Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Grades Modal */}
+      {showGradesModal && (
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            style={{ maxWidth: "900px", maxHeight: "85vh", overflowY: "auto" }}
+          >
+            <div className="modal-header">
+              <h2>Edit Grades - {editingStudentForGrades?.name}</h2>
+              <button className="modal-close" onClick={closeGradesModal}>
+                ✕
+              </button>
+            </div>
+            <form className="student-form" onSubmit={handleSaveGrades}>
+              <div className="modal-body">
+                <div
+                  style={{
+                    marginBottom: "1.5rem",
+                    padding: "0.75rem",
+                    backgroundColor: "#e3f2fd",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <p
+                    style={{ margin: 0, fontSize: "0.85rem", color: "#1976d2" }}
+                  >
+                    <strong>Student:</strong> {editingStudentForGrades?.name} |
+                    <strong style={{ marginLeft: "0.5rem" }}>LRN:</strong>{" "}
+                    {editingStudentForGrades?.lrn} |
+                    <strong style={{ marginLeft: "0.5rem" }}>Class:</strong>{" "}
+                    {editingStudentForGrades?.class}
+                  </p>
+                </div>
+
+                {/* Grades Table */}
+                <div style={{ overflowX: "auto", marginBottom: "1.5rem" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "14px",
+                    }}
+                  >
+                    <thead>
+                      <tr
+                        style={{
+                          backgroundColor: "#f5f5f5",
+                          borderBottom: "2px solid #ddd",
+                        }}
+                      >
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "left",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Subject
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Q1
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Q2
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Q3
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Q4
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                          }}
+                        >
+                          Average
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        "Filipino",
+                        "GMRC",
+                        "Language",
+                        "Literature",
+                        "Makabansa",
+                        "Math",
+                        "Reading",
+                      ].map((subject, idx) => {
+                        const subjectKey = subject
+                          .toLowerCase()
+                          .replace(/\s+/g, "_");
+                        const grades = gradesData[subjectKey] || {
+                          q1: "",
+                          q2: "",
+                          q3: "",
+                          q4: "",
+                        };
+                        const q1 = parseFloat(grades.q1) || 0;
+                        const q2 = parseFloat(grades.q2) || 0;
+                        const q3 = parseFloat(grades.q3) || 0;
+                        const q4 = parseFloat(grades.q4) || 0;
+                        const average =
+                          grades.q1 && grades.q2 && grades.q3 && grades.q4
+                            ? ((q1 + q2 + q3 + q4) / 4).toFixed(2)
+                            : "—";
+
+                        return (
+                          <tr
+                            key={idx}
+                            style={{ borderBottom: "1px solid #eee" }}
+                          >
+                            <td style={{ padding: "10px", fontWeight: "500" }}>
+                              {subject}
+                            </td>
+                            <td style={{ padding: "8px", textAlign: "center" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={grades.q1}
+                                onChange={(e) => {
+                                  setGradesData((prev) => ({
+                                    ...prev,
+                                    [subjectKey]: {
+                                      ...prev[subjectKey],
+                                      q1: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                placeholder="0"
+                                style={{
+                                  width: "50px",
+                                  padding: "6px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  textAlign: "center",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px", textAlign: "center" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={grades.q2}
+                                onChange={(e) => {
+                                  setGradesData((prev) => ({
+                                    ...prev,
+                                    [subjectKey]: {
+                                      ...prev[subjectKey],
+                                      q2: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                placeholder="0"
+                                style={{
+                                  width: "50px",
+                                  padding: "6px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  textAlign: "center",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px", textAlign: "center" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={grades.q3}
+                                onChange={(e) => {
+                                  setGradesData((prev) => ({
+                                    ...prev,
+                                    [subjectKey]: {
+                                      ...prev[subjectKey],
+                                      q3: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                placeholder="0"
+                                style={{
+                                  width: "50px",
+                                  padding: "6px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  textAlign: "center",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px", textAlign: "center" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={grades.q4}
+                                onChange={(e) => {
+                                  setGradesData((prev) => ({
+                                    ...prev,
+                                    [subjectKey]: {
+                                      ...prev[subjectKey],
+                                      q4: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                placeholder="0"
+                                style={{
+                                  width: "50px",
+                                  padding: "6px",
+                                  border: "1px solid #ccc",
+                                  borderRadius: "4px",
+                                  textAlign: "center",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px",
+                                textAlign: "center",
+                                fontWeight: "600",
+                                color:
+                                  average !== "—"
+                                    ? average >= 75
+                                      ? "#4caf50"
+                                      : "#f44336"
+                                    : "#999",
+                              }}
+                            >
+                              {average}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="form-group">
+                  <label>Notes/Remarks</label>
+                  <textarea
+                    value={gradesData.remarks || ""}
+                    onChange={(e) =>
+                      setGradesData((prev) => ({
+                        ...prev,
+                        remarks: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter any notes or remarks"
+                    rows="3"
+                    style={{ width: "100%" }}
+                  ></textarea>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={closeGradesModal}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save All Grades
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

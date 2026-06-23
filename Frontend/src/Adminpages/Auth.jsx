@@ -122,7 +122,8 @@ const AuthPage = () => {
         }
 
         // Check if user must change password (first login with temporary password)
-        if (result.mustChangePassword) {
+        // Only students (fresh accounts) are required to change password
+        if (result.mustChangePassword && actualRole === "student") {
           // Store user info for password change
           localStorage.setItem("userIdForPasswordChange", result.user.id);
           localStorage.setItem("mustChangePassword", "true");
@@ -255,7 +256,7 @@ const AuthPage = () => {
   };
 
   const isPasswordStrong = (password) => {
-    return /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/.test(
+    return /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]).{8,}$/.test(
       password,
     );
   };
@@ -467,9 +468,12 @@ const AuthPage = () => {
         csrfToken = csrfToken.split("=")[1];
       } else {
         // Fetch CSRF token if not in cookie
-        const csrfResponse = await fetch("http://localhost:5000/api/auth/csrf-token", {
-          credentials: "include",
-        });
+        const csrfResponse = await fetch(
+          "http://localhost:5000/api/auth/csrf-token",
+          {
+            credentials: "include",
+          },
+        );
         const csrfData = await csrfResponse.json();
         csrfToken = csrfData.csrfToken;
       }
@@ -562,7 +566,9 @@ const AuthPage = () => {
           // Set authToken to mark user as authenticated
           localStorage.setItem("authToken", "authenticated");
           // Show success toast
-          toast.success("Code verification successful. Redirecting you to dashboard...");
+          toast.success(
+            "Code verification successful. Redirecting you to dashboard...",
+          );
           // Check if user must change password after MFA verification
           if (localStorage.getItem("mustChangePassword") === "true") {
             console.log("Must change password, showing password change modal");
@@ -1234,7 +1240,10 @@ const AuthPage = () => {
                   <input
                     type={showNewPass ? "text" : "password"}
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setPasswordError("");
+                    }}
                     placeholder="At least 8 characters"
                     required
                   />
@@ -1253,7 +1262,10 @@ const AuthPage = () => {
                   <input
                     type={showConfirmPass ? "text" : "password"}
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setPasswordError("");
+                    }}
                     placeholder="Re-enter your password"
                     required
                   />
@@ -1282,9 +1294,25 @@ const AuthPage = () => {
                   ✓ One uppercase letter
                 </span>
                 <span
+                  className={
+                    /[a-z]/.test(newPassword) ? "hint-met" : "hint-unmet"
+                  }
+                >
+                  ✓ One lowercase letter
+                </span>
+                <span
                   className={/\d/.test(newPassword) ? "hint-met" : "hint-unmet"}
                 >
                   ✓ One number
+                </span>
+                <span
+                  className={
+                    /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(newPassword)
+                      ? "hint-met"
+                      : "hint-unmet"
+                  }
+                >
+                  ✓ One special character
                 </span>
               </div>
               <button type="submit" className="submit-btn modal-submit-btn">

@@ -33,6 +33,8 @@ const authService = {
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Create user record in users table
+      // Only students (fresh accounts) require password change on first login
+      // Faculty/admin accounts do not require password change
       const { data: userData, error: userError } = await supabaseAdmin
         .from("users")
         .insert({
@@ -42,6 +44,7 @@ const authService = {
           status: "Active",
           password_hash: passwordHash,
           otp_enabled: true,
+          must_change_password: normalizedRole === "student" ? true : false,
         })
         .select();
 
@@ -100,7 +103,11 @@ const authService = {
   // Sign in user
   async signIn(email, password, ipAddress = null, userAgent = null) {
     try {
-      console.log("signIn called with:", { email, password, passwordLength: password?.length });
+      console.log("signIn called with:", {
+        email,
+        password,
+        passwordLength: password?.length,
+      });
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
