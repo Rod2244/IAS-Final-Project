@@ -76,30 +76,65 @@ const mfaService = {
         return { sent: true };
       }
 
+      // Prevent rapid duplicate sends: if an unused OTP was created very recently, skip
+      const recentWindowMs = 30 * 1000; // 30 seconds
+      const recentSince = new Date(Date.now() - recentWindowMs).toISOString();
+      const { data: recentOtp, error: recentErr } = await supabaseAdmin
+        .from('user_otps')
+        .select('id, created_at')
+        .eq('user_id', user.id)
+        .eq('used', false)
+        .eq('purpose', purpose)
+        .gt('created_at', recentSince)
+        .limit(1)
+        .maybeSingle();
+
+      if (!recentErr && recentOtp) {
+        console.log(`Skipping OTP send - recent unused OTP exists for user ${user.id}`);
+        return { sent: true };
+      }
+
       const code = generateOtpCode();
       const codeHash = hashCode(code);
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
 
-      // Invalidate any previous unused OTPs for this user and purpose before inserting a new one
-      await supabaseAdmin
-        .from("user_otps")
-        .update({ used: true })
-        .eq("user_id", user.id)
-        .eq("purpose", purpose)
-        .eq("used", false);
-
-      const { error: insertErr } = await supabaseAdmin.from("user_otps").insert({
-        user_id: user.id,
-        purpose,
+      // Insert the new OTP record first
+      const { data: insertData, error: insertErr } = await supabaseAdmin.from("user_otps").insert({
         user_id: user.id,
         code_hash: codeHash,
         expires_at: expiresAt,
         purpose,
-      });
+        used: false,
+      }).select('id, created_at').limit(1).maybeSingle();
 
-      if (insertErr) {
+      if (insertErr || !insertData) {
         console.warn("Failed to persist OTP:", insertErr);
-        // Still attempt to send, but record failure
+        // If we couldn't persist, still generate/send email to avoid blocking UX
+      }
+
+      // Ensure only the most recent unused OTP triggers an email send. This prevents
+      // two near-simultaneous requests from both sending different codes.
+      const { data: latestOtp, error: latestErr } = await supabaseAdmin
+        .from('user_otps')
+        .select('id, created_at')
+        .eq('user_id', user.id)
+        .eq('purpose', purpose)
+        .eq('used', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestErr || !latestOtp) {
+        // Nothing to send
+        return { sent: true };
+      }
+
+      // If the inserted record is not the latest (another concurrent insert won),
+      // mark this inserted one as used and skip sending an email for it.
+      if (insertData && latestOtp.id !== insertData.id) {
+        await supabaseAdmin.from('user_otps').update({ used: true }).eq('id', insertData.id);
+        console.log(`Skipping OTP send - another concurrent OTP is newer for user ${user.id}`);
+        return { sent: true };
       }
 
       const subject = purpose === "password_reset" ? "Password reset code" : "Your verification code";

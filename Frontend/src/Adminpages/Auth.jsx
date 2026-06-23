@@ -49,6 +49,9 @@ const AuthPage = () => {
   // Modal flow state
   const [step, setStep] = useState('login');
 
+  // Signup success message for modal
+  const [signupMessage, setSignupMessage] = useState('');
+
   // Set-password modal state
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -61,6 +64,8 @@ const AuthPage = () => {
   const [otpError, setOtpError] = useState('');
   const [otpMessage, setOtpMessage] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
+  const [mfaResendLoading, setMfaResendLoading] = useState(false);
 
   const [resetEmail, setResetEmail] = useState('');
   const [resetError, setResetError] = useState('');
@@ -72,6 +77,8 @@ const AuthPage = () => {
   const [showResetConfirmPass, setShowResetConfirmPass] = useState(false);
   const [resetResendCooldown, setResetResendCooldown] = useState(0);
   const [mfaResendCooldown, setMfaResendCooldown] = useState(0);
+  const [resetVerifying, setResetVerifying] = useState(false);
+  const [resetResendLoading, setResetResendLoading] = useState(false);
 
   const handleToggle = () => {
     setIsSignUp(!isSignUp);
@@ -169,8 +176,8 @@ const AuthPage = () => {
       if (result.success) {
         // Store email for later reference
         setUserEmail(signUpEmail);
-        // Show success message
-        setSignUpError(''); // Clear errors
+        // Clear errors
+        setSignUpError('');
         // Reset form
         setSignUpFirstName('');
         setSignUpLastName('');
@@ -178,10 +185,11 @@ const AuthPage = () => {
         setSignUpEmail('');
         setSignUpFacultyId('');
         setSignUpPassword('');
-        // Toggle back to sign in
+        // Toggle back to sign in view but show a modal instead of alert
         setIsSignUp(false);
-        // Show success message
-        alert('Account created successfully! Please sign in with your credentials.');
+        const msg = result.message || 'An activation email has been sent to your address. Please verify your email to activate your account before signing in.';
+        setSignupMessage(msg);
+        setStep('signup-success');
       }
     } catch (error) {
       setSignUpError(error.response?.data?.error || error.message || 'Sign up failed. Please try again.');
@@ -265,6 +273,7 @@ const AuthPage = () => {
     }
 
     try {
+      setResetVerifying(true);
       const response = await authService.verifyPasswordResetOtp(resetEmail, code);
       if (response.success) {
         setStep('reset-complete');
@@ -274,6 +283,8 @@ const AuthPage = () => {
       }
     } catch (err) {
       setResetError(err.response?.data?.error || err.message || 'Unable to verify reset code.');
+    } finally {
+      setResetVerifying(false);
     }
   };
 
@@ -285,11 +296,15 @@ const AuthPage = () => {
     setResetCode(['', '', '', '', '', '']);
 
     try {
+      setResetResendLoading(true);
       await authService.requestPasswordReset(resetEmail);
       setResetSuccess('A new reset code has been sent to your email.');
       setResetResendCooldown(60);
     } catch (err) {
       setResetError(err.response?.data?.error || err.message || 'Unable to resend reset code. Please try again.');
+    }
+    finally {
+      setResetResendLoading(false);
     }
   };
 
@@ -380,27 +395,30 @@ const AuthPage = () => {
     }
 
     // Verify OTP with backend
-    (async () => {
-      try {
-        const response = await authService.verifyOtp(
-          userEmail || signInEmail,
-          code,
-          window.location.hostname,
-          navigator.userAgent,
-        );
+      (async () => {
+        setMfaSubmitting(true);
+        try {
+          const response = await authService.verifyOtp(
+            userEmail || signInEmail,
+            code,
+            window.location.hostname,
+            navigator.userAgent,
+          );
 
-        if (response.success) {
-          const role = response.userRole || localStorage.getItem('userRole') || 'student';
-          localStorage.setItem('userRole', role);
-          if (role === 'student') navigate('/student');
-          else navigate('/dashboard');
-        } else {
-          setOtpError(response.error || 'Invalid code. Please try again.');
+          if (response.success) {
+            const role = response.userRole || localStorage.getItem('userRole') || 'student';
+            localStorage.setItem('userRole', role);
+            if (role === 'student') navigate('/student');
+            else navigate('/dashboard');
+          } else {
+            setOtpError(response.error || 'Invalid code. Please try again.');
+          }
+        } catch (err) {
+          setOtpError(err.response?.data?.error || err.message || 'Verification failed. Please try again.');
+        } finally {
+          setMfaSubmitting(false);
         }
-      } catch (err) {
-        setOtpError(err.response?.data?.error || err.message || 'Verification failed. Please try again.');
-      }
-    })();
+      })();
   };
 
   const handleResendOtp = async () => {
@@ -410,12 +428,16 @@ const AuthPage = () => {
     setOtpError('');
     setOtpMessage('');
     try {
+      setMfaResendLoading(true);
       await authService.sendOtp(userEmail || signInEmail);
       setOtpMessage('A new verification code has been sent to your email.');
       setMfaResendCooldown(60);
     } catch (err) {
       console.error('Resend OTP error:', err);
       setOtpError('Unable to resend code right now. Please try again shortly.');
+    }
+    finally {
+      setMfaResendLoading(false);
     }
   };
 
@@ -730,12 +752,24 @@ const AuthPage = () => {
                     onKeyDown={(e) => handleResetCodeKeyDown(i, e)}
                     className="otp-input"
                     autoFocus={i === 0}
+                    disabled={resetVerifying}
                     aria-label={`Reset code character ${i + 1}`}
                   />
                 ))}
               </div>
 
-              <button type="submit" className="submit-btn modal-submit-btn">Verify Code</button>
+              <button type="submit" className="submit-btn modal-submit-btn" disabled={resetVerifying}>
+                {resetVerifying ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{verticalAlign: 'middle'}}>
+                    <g>
+                      <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="2" fill="none" opacity="0.25" />
+                      <path d="M22 12a10 10 0 0 1-10 10" stroke="#fff" strokeWidth="2" fill="none">
+                        <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+                      </path>
+                    </g>
+                  </svg>
+                ) : 'Verify Code'}
+              </button>
             </form>
             <div className="otp-resend reset-resend">
               Didn’t receive the reset code?{' '}
@@ -743,9 +777,18 @@ const AuthPage = () => {
                 type="button"
                 className="resend-btn"
                 onClick={handleResendResetCode}
-                disabled={resetResendCooldown > 0}
+                disabled={resetResendCooldown > 0 || resetResendLoading}
               >
-                {resetResendCooldown > 0 ? `Resend in ${resetResendCooldown}s` : 'Resend Code'}
+                {resetResendLoading ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" style={{verticalAlign: 'middle'}}>
+                    <g>
+                      <circle cx="12" cy="12" r="10" stroke="#000" strokeWidth="2" fill="none" opacity="0.25" />
+                      <path d="M22 12a10 10 0 0 1-10 10" stroke="#000" strokeWidth="2" fill="none">
+                        <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+                      </path>
+                    </g>
+                  </svg>
+                ) : (resetResendCooldown > 0 ? `Resend in ${resetResendCooldown}s` : 'Resend Code')}
               </button>
             </div>
           </div>
@@ -925,12 +968,24 @@ const AuthPage = () => {
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     className="otp-input"
                     autoFocus={i === 0}
+                    disabled={mfaSubmitting}
                     aria-label={`OTP character ${i + 1}`}
                   />
                 ))}
               </div>
 
-              <button type="submit" className="submit-btn modal-submit-btn">Verify & Continue</button>
+              <button type="submit" className="submit-btn modal-submit-btn" disabled={mfaSubmitting}>
+                {mfaSubmitting ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{verticalAlign: 'middle'}}>
+                    <g>
+                      <circle cx="12" cy="12" r="10" stroke="#fff" strokeWidth="2" fill="none" opacity="0.25" />
+                      <path d="M22 12a10 10 0 0 1-10 10" stroke="#fff" strokeWidth="2" fill="none">
+                        <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+                      </path>
+                    </g>
+                  </svg>
+                ) : 'Verify & Continue'}
+              </button>
 
               <div className="otp-resend">
                 Didn't receive a code?{' '}
@@ -938,9 +993,18 @@ const AuthPage = () => {
                   type="button"
                   className="resend-btn"
                   onClick={handleResendOtp}
-                  disabled={mfaResendCooldown > 0}
+                  disabled={mfaResendCooldown > 0 || mfaResendLoading}
                 >
-                  {mfaResendCooldown > 0 ? `Resend in ${mfaResendCooldown}s` : 'Resend Code'}
+                  {mfaResendLoading ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" style={{verticalAlign: 'middle'}}>
+                      <g>
+                        <circle cx="12" cy="12" r="10" stroke="#000" strokeWidth="2" fill="none" opacity="0.25" />
+                        <path d="M22 12a10 10 0 0 1-10 10" stroke="#000" strokeWidth="2" fill="none">
+                          <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+                        </path>
+                      </g>
+                    </svg>
+                  ) : (mfaResendCooldown > 0 ? `Resend in ${mfaResendCooldown}s` : 'Resend Code')}
                 </button>
               </div>
             </form>
@@ -951,6 +1015,29 @@ const AuthPage = () => {
                 Sign In
               </button>
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Signup Success / Activation Sent */}
+      {step === 'signup-success' && (
+        <div className="modal-backdrop" onClick={handleCloseModal}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon-wrap modal-icon-mail">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16v16H4z" />
+                <path d="M22 6l-10 7L2 6" />
+              </svg>
+            </div>
+            <h2 className="modal-title">Check Your Email</h2>
+            <p className="modal-subtitle">
+              {signupMessage || 'We have sent an activation link to your email. Follow the link to activate your account before signing in.'}
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="submit-btn modal-submit-btn" onClick={handleCloseModal}>
+                Back to Sign In
+              </button>
+            </div>
           </div>
         </div>
       )}

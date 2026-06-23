@@ -1,4 +1,7 @@
 const express = require("express");
+const { BrevoClient } = require('@getbrevo/brevo');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const authService = require("../services/authService");
 const securityService = require("../services/securityService");
 const auditService = require("../services/auditService");
@@ -29,6 +32,111 @@ router.post("/signup", async (req, res) => {
     }
 
     const requestedRole = role || "student";
+    const isTeacher = requestedRole === 'faculty' || requestedRole === 'teacher' || requestedRole === 'admin';
+
+    // Reject duplicate email if it already exists in users
+    const { data: existingUser, error: userLookupError } = await supabaseAdmin
+      .from('users')
+      .select('id,email')
+      .ilike('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (!userLookupError && existingUser) {
+      return res.status(400).json({ error: 'Email is already registered.' });
+    }
+
+    // Teacher/faculty/admin accounts require email verification first
+    if (isTeacher) {
+      if (!process.env.PENDING_PASSWORD_SECRET) {
+        return res.status(500).json({ error: 'Pending password encryption secret is not configured.' });
+      }
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(process.env.PENDING_PASSWORD_SECRET, 'hex'), iv);
+      let encrypted = cipher.update(password, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      const authTag = cipher.getAuthTag().toString('hex');
+
+      const { data: existingPending, error: pendingLookupError } = await supabaseAdmin
+        .from('pending_registrations')
+        .select('*')
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingLookupError || !existingPending) {
+        const { error: insertErr } = await supabaseAdmin.from('pending_registrations').insert({
+          email,
+          password_encrypted: encrypted,
+          password_nonce: iv.toString('hex'),
+          password_tag: authTag,
+          role: 'admin',
+          profile_data: {
+            firstName: firstName || null,
+            lastName: lastName || null,
+            middleInitial: middleInitial || null,
+            facultyId: facultyId || null,
+          },
+          verification_token: token,
+          token_expires_at: tokenExpiry,
+        });
+
+        if (insertErr) {
+          console.error('Insert pending registration error:', insertErr);
+          return res.status(500).json({ error: 'Unable to create pending registration.' });
+        }
+      } else {
+        const { error: updateErr } = await supabaseAdmin
+          .from('pending_registrations')
+          .update({
+            password_encrypted: encrypted,
+            password_nonce: iv.toString('hex'),
+            password_tag: authTag,
+            profile_data: {
+              firstName: firstName || null,
+              lastName: lastName || null,
+              middleInitial: middleInitial || null,
+              facultyId: facultyId || null,
+            },
+            verification_token: token,
+            token_expires_at: tokenExpiry,
+            created_at: new Date().toISOString(),
+          })
+          .eq('id', existingPending.id);
+
+        if (updateErr) {
+          console.error('Update pending registration error:', updateErr);
+          return res.status(500).json({ error: 'Unable to update pending registration.' });
+        }
+      }
+
+      try {
+        const brevo = new BrevoClient({ apiKey: process.env.BREVO_API_KEY });
+        const activationUrl = `${process.env.BACKEND_BASE_URL || 'http://localhost:5000'}/api/auth/verify-email?token=${token}`;
+
+        await brevo.transactionalEmails.sendTransacEmail({
+          subject: 'Activate Your Teacher Account',
+          sender: { name: 'Summit Ridge Team', email: process.env.NO_REPLY_EMAIL || 'no-reply@summitridge.edu' },
+          to: [{ email, name: `${firstName || ''} ${lastName || ''}`.trim() }],
+          htmlContent: `
+            <h3>Welcome ${firstName || 'Teacher'}!</h3>
+            <p>Please confirm your email to activate your teacher account:</p>
+            <p><a href="${activationUrl}" style="background:#22c55e;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Verify My Email</a></p>
+            <p>This link will expire in 15 minutes.</p>
+          `,
+        });
+      } catch (emailErr) {
+        console.error('Brevo send error:', emailErr);
+        await supabaseAdmin.from('pending_registrations').delete().ilike('email', email);
+        return res.status(500).json({ error: 'Failed to send verification email.' });
+      }
+
+      return res.status(200).json({ success: true, message: 'Verification link sent to your email.' });
+    }
+
     const result = await authService.signUp(email, password, requestedRole, {
       firstName,
       lastName,
@@ -41,7 +149,75 @@ router.post("/signup", async (req, res) => {
       userRecord: result.userRecord,
     });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('Signup error:', error);
+    res.status(400).json({ error: error.message || 'Unable to create account.' });
+  }
+});
+
+// Email verification route
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ error: 'Missing token.' });
+    }
+
+    const { data: pendingRow, error: pendingErr } = await supabaseAdmin
+      .from('pending_registrations')
+      .select('*')
+      .eq('verification_token', token)
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingErr || !pendingRow) {
+      return res.status(400).send('Invalid or expired verification link.');
+    }
+
+    if (new Date() > new Date(pendingRow.token_expires_at)) {
+      await supabaseAdmin.from('pending_registrations').delete().eq('id', pendingRow.id);
+      return res.status(400).send('This verification link has expired. Please sign up again.');
+    }
+
+    const { data: existingUserAfter, error: existingUserAfterErr } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .ilike('email', pendingRow.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingUserAfterErr && existingUserAfter) {
+      await supabaseAdmin.from('pending_registrations').delete().eq('id', pendingRow.id);
+      return res.redirect(`${process.env.FRONTEND_BASE_URL || 'http://localhost:5173'}/login?already=true`);
+    }
+
+    if (!process.env.PENDING_PASSWORD_SECRET) {
+      return res.status(500).json({ error: 'Pending password encryption secret is not configured.' });
+    }
+
+    const key = Buffer.from(process.env.PENDING_PASSWORD_SECRET, 'hex');
+    const iv = Buffer.from(pendingRow.password_nonce, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(Buffer.from(pendingRow.password_tag, 'hex'));
+    let decrypted = decipher.update(pendingRow.password_encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    try {
+      await authService.signUp(pendingRow.email, decrypted, pendingRow.role || 'admin', {
+        firstName: pendingRow.profile_data?.firstName,
+        lastName: pendingRow.profile_data?.lastName,
+        middleInitial: pendingRow.profile_data?.middleInitial,
+        facultyId: pendingRow.profile_data?.facultyId,
+      });
+
+      await supabaseAdmin.from('pending_registrations').delete().eq('id', pendingRow.id);
+      return res.redirect(`${process.env.FRONTEND_BASE_URL || 'http://localhost:5173'}/login?verified=true`);
+    } catch (createErr) {
+      console.error('Error creating account after verification:', createErr);
+      return res.status(500).send('Failed to create account. Please contact support.');
+    }
+  } catch (error) {
+    console.error('Verification error:', error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
