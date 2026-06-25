@@ -1,34 +1,126 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../css/StudentPortal.css';
 import { Trophy, FileText, Download } from 'lucide-react';
+import { authService, gradeService } from '../services/apiClient';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const StudentGrades = () => {
-  const grades = [
-    { subject: 'Filipino',   q1: 85, q2: 87, q3: 89, q4: 90, average: 87.75, remarks: 'Passed' },
-    { subject: 'GMRC',       q1: 92, q2: 90, q3: 94, q4: 93, average: 92.25, remarks: 'Passed' },
-    { subject: 'Language',   q1: 88, q2: 85, q3: 86, q4: 89, average: 87.0,  remarks: 'Passed' },
-    { subject: 'Literature', q1: 78, q2: 80, q3: 82, q4: 81, average: 80.25, remarks: 'Passed' },
-    { subject: 'Makabansa',  q1: 90, q2: 91, q3: 88, q4: 92, average: 90.25, remarks: 'Passed' },
-    { subject: 'Math',       q1: 65, q2: 68, q3: 72, q4: 70, average: 68.75, remarks: 'Failed' },
-    { subject: 'Reading',    q1: 60, q2: 64, q3: 70, q4: 73, average: 66.75, remarks: 'Failed' },
-  ];
+  const [grades, setGrades] = useState([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
+  const [studentProfile, setStudentProfile] = useState(null);
 
-  const handleDownload = () => {
-    const headers = ['Subject', 'Q1', 'Q2', 'Q3', 'Q4', 'Average', 'Remarks'];
-    const rows = grades.map(g => [g.subject, g.q1, g.q2, g.q3, g.q4, g.average.toFixed(2), g.remarks]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'My_Grades.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+  useEffect(() => {
+    const loadStudentGrades = async () => {
+      try {
+        setIsLoading(true);
+        const currentUser = await authService.getCurrentUser();
+        
+        const response = await fetch('http://localhost:5000/api/students'); 
+        const result = await response.json();
+        
+        const myStudentProfile = result.data.find(s => s.user_id === currentUser.id);
+
+        if (myStudentProfile) {
+          setStudentProfile(myStudentProfile);
+        }
+
+        const studentGrades = await gradeService.getByStudent(myStudentProfile.id);
+
+        setGrades(studentGrades || []);
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Load student grades error:", err);
+        setError(err.message);
+        setIsLoading(false);
+      }
+    };
+
+    loadStudentGrades();
+  }, []);
+
+  const getGradeValue = (item, fieldNames) => {
+    for (const field of fieldNames) {
+      if (item[field] !== undefined && item[field] !== null) {
+        return item[field];
+      }
+    }
+    return 0;
   };
 
-  const finalAverage = (
-    grades.reduce((sum, item) => sum + item.average, 0) / grades.length
-  ).toFixed(2);
+const displayGrades = grades.map((item) => {
+  const q1 = getGradeValue(item, ['q1_grade', 'preliminary_grade', 'q1']);
+  const q2 = getGradeValue(item, ['q2_grade', 'midterm_grade', 'q2']);
+  const q3 = getGradeValue(item, ['q3_grade', 'final_grade', 'q3']);
+  const q4 = getGradeValue(item, ['q4_grade', 'fourth_period_grade', 'q4']);
+  
+  const average = getGradeValue(item, ['average_grade', 'average']) || ((q1 + q2 + q3 + q4) / 4);
+
+  const subjectName = item.subjects?.subject_name || item.subject_name || 'Unknown Subject';
+  
+  const remarks = item.remarks || (parseFloat(average) >= 75 ? 'Passed' : 'Failed');
+
+  return {
+    id: item.id,
+    subject_name: subjectName, 
+    q1,
+    q2,
+    q3,
+    q4,
+    average: parseFloat(average).toFixed(2),
+    remarks,
+  };
+});
+
+const finalAverage = displayGrades.length > 0 
+  ? (displayGrades.reduce((sum, item) => sum + parseFloat(item.average), 0) / displayGrades.length).toFixed(2)
+  : '0.00';
+
+const handleDownloadCSV = () => {
+  const headers = ['Subject', 'Q1', 'Q2', 'Q3', 'Q4', 'Average', 'Remarks'];
+  const rows = displayGrades.map((item) => [
+    item.subject_name, item.q1, item.q2, item.q3, item.q4, item.average, item.remarks
+  ]);
+  
+  const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'My_Grades.csv';
+  a.click();
+  setIsDownloadOpen(false); 
+};
+
+const handleDownloadPDF = () => {
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.text("Student Report Card", 14, 20);
+  doc.setFontSize(12);
+  doc.text(`Name: ${studentProfile?.name || 'N/A'}`, 14, 35);
+  doc.text(`Grade Level: ${studentProfile?.grade || 'N/A'}`, 14, 42);
+  doc.text(`LRN: ${studentProfile?.lrn || 'N/A'}`, 14, 49);
+
+  autoTable(doc, {
+    startY: 58, 
+    head: [['Subject', 'Q1', 'Q2', 'Q3', 'Q4', 'Average', 'Remarks']],
+    body: displayGrades.map(item => [
+      item.subject_name, 
+      item.q1, 
+      item.q2, 
+      item.q3, 
+      item.q4, 
+      item.average, 
+      item.remarks
+    ]),
+  });
+
+  doc.save('My_Grades.pdf');
+  setIsDownloadOpen(false);
+};
 
   return (
     <div className="student-page">
@@ -41,23 +133,39 @@ const StudentGrades = () => {
         </div>
 
         <div className="student-action-buttons">
-          <button className="blue-btn">
-            <Trophy size={15} /> View Ranking
-          </button>
-          <button className="green-btn">
-            <FileText size={15} /> Preview Report Card
-          </button>
-          <button className="download-btn" onClick={handleDownload}>
-            <Download size={15} /> Download Grades
-          </button>
+          {/* Using your existing .download-btn style */}
+          <div className="download-container">
+            <button 
+              className="download-btn" 
+              onClick={() => setIsDownloadOpen(!isDownloadOpen)}
+            >
+              Download Grades ▾
+            </button>
+
+            {isDownloadOpen && (
+              <div className="download-menu">
+                <button className="download-menu-item" onClick={handleDownloadCSV}>
+                  Download as CSV
+                </button>
+                <button className="download-menu-item" onClick={handleDownloadPDF}>
+                  Download as PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       <p className="student-note">
-        No ranking has been posted yet. Tap View Ranking to check updates.
+        These grades are pulled from your saved record and are view-only.
       </p>
 
       <div className="table-wrapper">
+        {isLoading ? (
+          <p>Loading your grades...</p>
+        ) : error ? (
+          <p className="error-text">Error: {error}</p>
+        ) : (
         <table className="grades-table">
           <thead>
             <tr>
@@ -70,24 +178,25 @@ const StudentGrades = () => {
               <th>Remarks</th>
             </tr>
           </thead>
-          <tbody>
-            {grades.map((item, index) => (
-              <tr key={index}>
-                <td>{item.subject}</td>
-                <td>{item.q1}</td>
-                <td>{item.q2}</td>
-                <td>{item.q3}</td>
-                <td>{item.q4}</td>
-                <td className="average-cell">{item.average.toFixed(2)}</td>
-                <td>
-                  <span className={`remark-badge ${item.remarks.toLowerCase()}`}>
-                    {item.remarks}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+            <tbody>
+            {(displayGrades || []).map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.subject_name || "N/A"}</td>
+                      <td>{item.q1 ?? "-"}</td>
+                      <td>{item.q2 ?? "-"}</td>
+                      <td>{item.q3 ?? "-"}</td>
+                      <td>{item.q4 ?? "-"}</td>
+                      <td className="average-cell">{item.average ?? "0"}</td>
+                      <td>
+                        <span className={`remark-badge ${item.remarks?.toLowerCase() || 'none'}`}>
+                          {item.remarks || "N/A"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+            </tbody>
         </table>
+        )}
       </div>
     </div>
   );

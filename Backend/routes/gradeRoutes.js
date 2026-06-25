@@ -17,12 +17,19 @@ router.get("/", async (req, res) => {
 router.put("/bulk-update", async (req, res) => {
   try {
     const { grades } = req.body;
-    if (!Array.isArray(grades)) throw new Error("Grades data must be an array.");
-    
+    if (!Array.isArray(grades) || grades.length === 0) {
+      throw new Error("Grades data must be a non-empty array.");
+    }
+
     const updatedGrades = await Promise.all(
-      grades.map(g => gradeService.updateGrade(g.id, g))
+      grades.map((gradeItem, index) => {
+        if (!gradeItem?.id) {
+          throw new Error(`Missing grade id at index ${index}.`);
+        }
+        return gradeService.updateGrade(gradeItem.id, gradeItem);
+      }),
     );
-    
+
     res.status(200).json({ success: true, data: updatedGrades });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -30,11 +37,20 @@ router.put("/bulk-update", async (req, res) => {
 });
 
 // Get grades by student
+// Add this to your gradeRoutes.js
 router.get("/student/:studentId", async (req, res) => {
   try {
-    const grades = await gradeService.getGradesByStudent(req.params.studentId);
+    const { studentId } = req.params;
+    
+    // Safety check for ID
+    if (!studentId || studentId === 'undefined') {
+      return res.status(400).json({ error: "Invalid Student ID" });
+    }
+
+    const grades = await gradeService.getGradesByStudent(studentId);
     res.status(200).json({ success: true, data: grades });
   } catch (error) {
+    console.error("Backend Error:", error);
     res.status(400).json({ error: error.message });
   }
 });

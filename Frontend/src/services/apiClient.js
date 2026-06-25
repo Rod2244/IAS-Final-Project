@@ -375,85 +375,65 @@ export const studentService = {
 // ============================================================================
 
 export const gradeService = {
+  // GET all grades
   async getAll() {
     try {
-      const { data, error } = await supabase.from("grades").select("*");
-      if (error) throw error;
-      return data;
+      const response = await apiClient.get("/grades");
+      return response.data.data; // Assuming your server returns { success: true, data: [...] }
     } catch (error) {
       console.error("Get all grades error:", error);
       throw error;
     }
   },
 
+  // GET grades by student
   async getByStudent(studentId) {
     try {
-      const { data, error } = await supabase
-        .from("grades")
-        .select("*")
-        .eq("student_id", studentId);
-      if (error) throw error;
-      return data;
+      const response = await apiClient.get(`/grades/student/${studentId}`);
+      return response.data.data;
     } catch (error) {
       console.error("Get student grades error:", error);
       throw error;
     }
   },
 
+  // GET grades by class
   async getByClass(classId) {
     try {
-      const { data, error } = await supabase
-        .from("grades")
-        .select("*")
-        .eq("class_id", classId);
-      if (error) throw error;
-      return data;
+      const response = await apiClient.get(`/grades/class/${classId}`);
+      return response.data.data;
     } catch (error) {
       console.error("Get class grades error:", error);
       throw error;
     }
   },
 
+  // CREATE a grade
   async create(grade) {
     try {
-      // Auto-calculate average if not provided
-      if (!grade.average_grade) {
-        const { p, m, f, fp } = grade;
-        grade.average_grade = (p + m + f + fp) / 4;
-        grade.remarks = grade.average_grade >= 75 ? "Passed" : "Failed";
-      }
-
-      const { data, error } = await supabase
-        .from("grades")
-        .insert([grade])
-        .select();
-      if (error) throw error;
-      return data[0];
+      const response = await apiClient.post("/grades", grade);
+      return response.data.data;
     } catch (error) {
       console.error("Create grade error:", error);
       throw error;
     }
   },
 
+  // UPDATE a grade
   async update(id, grade) {
     try {
-      const { data, error } = await supabase
-        .from("grades")
-        .update(grade)
-        .eq("id", id)
-        .select();
-      if (error) throw error;
-      return data[0];
+      const response = await apiClient.put(`/grades/${id}`, grade);
+      return response.data.data;
     } catch (error) {
       console.error("Update grade error:", error);
       throw error;
     }
   },
 
+  // DELETE a grade
   async delete(id) {
     try {
-      const { error } = await supabase.from("grades").delete().eq("id", id);
-      if (error) throw error;
+      await apiClient.delete(`/grades/${id}`);
       return true;
     } catch (error) {
       console.error("Delete grade error:", error);

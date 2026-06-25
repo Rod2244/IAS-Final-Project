@@ -13,16 +13,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get student by ID
-router.get("/:id", async (req, res) => {
-  try {
-    const student = await studentService.getStudentById(req.params.id);
-    res.status(200).json({ success: true, data: student });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
 // Get student by LRN
 router.get("/lrn/:lrn", async (req, res) => {
   try {
@@ -50,6 +40,16 @@ router.get("/section/:section", async (req, res) => {
       req.params.section,
     );
     res.status(200).json({ success: true, data: students });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get student by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const student = await studentService.getStudentById(req.params.id);
+    res.status(200).json({ success: true, data: student });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

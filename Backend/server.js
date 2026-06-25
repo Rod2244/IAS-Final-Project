@@ -52,7 +52,8 @@ const csrfProtection = csrf({
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Explicitly allow DELETE
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "X-CSRF-Token", "Authorization"],
     credentials: true,
   }),
 );
@@ -133,9 +134,22 @@ app.use((err, req, res, next) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+const server = app.listen(PORT);
+
+server.on("listening", () => {
   console.log(`✅ Server is running smoothly on port ${PORT}`);
   console.log(
     `📡 CORS enabled for: ${process.env.CORS_ORIGIN || "http://localhost:5173"}`,
   );
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `❌ Port ${PORT} is already in use. Stop the other process or set PORT in .env.`,
+    );
+  } else {
+    console.error("❌ Server failed to start:", err.message);
+  }
+  process.exit(1);
 });

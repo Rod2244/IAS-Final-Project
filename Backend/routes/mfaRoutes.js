@@ -45,6 +45,7 @@ router.post("/verify", async (req, res) => {
       recordId: null,
     });
 
+    console.log("MFA verify success, returning:", { success: true, userRole: verify.user.role, userId: verify.user.id });
     res.status(200).json({ success: true, userRole: verify.user.role });
   } catch (err) {
     console.error("MFA verify error", err);

@@ -578,3 +578,39 @@
 .excel-table-wrapper::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+@media print {
+  /* 1. Hide unwanted UI elements */
+  /* Replace .sidebar, .navbar, .topbar with the actual class names used in your MainLayout */
+  .sidebar, 
+  .navbar, 
+  .topnavbar, 
+  .btn-toolbar, 
+  .btn-action, 
+  .btn-save, 
+  .btn-back,
+  .modal-overlay,
+  .scrollbar,
+  .grades-summary {
+    display: none !important;
+  }
+
+  /* 2. Reset the main container to take full width */
+  .view-grades, .grades-container {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  /* 3. Ensure the table is visible and not hidden by overflow */
+  .excel-table-wrapper {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  /* 4. Optional: Clean up the summary card styling for print */
+  .grades-summary {
+    page-break-inside: avoid;
+  }
+}

@@ -5,6 +5,7 @@ import StudentGrades from './StudentGrades';
 import StudentAttendance from './StudentAttendance';
 import StudentSchedule from './StudentSchedule';
 import logo from '../assets/UniversityAuthlogo.png';
+import { authService } from '../services/apiClient';
 import {
   LayoutDashboard,
   BookOpen,
@@ -37,12 +38,54 @@ const StudentLayout = () => {
     window.location.href = '/login';
   };
 
-  const studentInfo = {
-    name: 'Dennis Whitaker',
-    gradeLevel: 'Grade 1 - Amethyst',
-    lrn: '12623110121',
-    schoolYear: '2026-2027',
-  };
+  const [studentInfo, setStudentInfo] = useState({
+    name: 'Loading...',
+    gradeLevel: 'Loading...',
+    lrn: '...',
+    schoolYear: '...',
+  });
+
+useEffect(() => {
+    const loadStudentProfile = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (!currentUser?.email) return;
+
+        const res = await fetch('http://localhost:5000/api/students');
+        const json = await res.json();
+        
+        // --- DEBUG LOGGING ---
+        console.log("Full Student List from API:", json);
+        // This log will tell us exactly what keys (like 'email') exist in your data
+        if (json.data && json.data.length > 0) {
+           console.log("First student record looks like:", json.data[0]);
+        }
+        // ---------------------
+
+// --- UPDATED LOGIC: Match by user_id ---
+        const profile = (json.data || []).find((s) => {
+            // Compare the ID from the database with the ID of the logged-in user
+            return s.user_id === currentUser.id; 
+        });
+        // --------------------------------------
+
+        if (profile) {
+          setStudentInfo({
+            name: profile.name || 'Unknown Student',
+            gradeLevel: `${profile.grade || ''} ${profile.class ? `- ${profile.class}` : ''}`,
+            lrn: profile.lrn || 'N/A',
+            schoolYear: profile.school_year || '2026-2027',
+          });
+        } else {
+          console.error("NO MATCH FOUND. User ID:", currentUser.id);
+        }
+      } catch (err) {
+        console.error('Failed to load student profile layout:', err);
+      }
+    };
+
+    loadStudentProfile();
+  }, []); 
 
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
