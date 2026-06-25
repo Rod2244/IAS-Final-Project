@@ -232,8 +232,8 @@
 .green-btn:hover { opacity: 0.88; }
 
 .download-btn {
-  background: var(--white);
-  color: var(--navy);
+  background: var(--slate-light);
+  color: var(--white);
   border: 1.5px solid var(--border);
   padding: 9px 16px;
   border-radius: 8px;
@@ -244,8 +244,48 @@
   transition: all 0.2s;
 }
 .download-btn:hover {
-  background: var(--bg);
+  background: var(--slate);
   border-color: var(--navy);
+}
+
+/* The wrapper for the dropdown */
+.download-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* The dropdown menu popup */
+.download-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 8px;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+/* Individual options in the menu */
+.download-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--navy);
+  transition: background 0.2s;
+}
+
+.download-menu-item:hover {
+  background: var(--slate-light);
 }
 
 .student-note { color: var(--slate-light); margin: 0 0 18px; font-size: 13px; }

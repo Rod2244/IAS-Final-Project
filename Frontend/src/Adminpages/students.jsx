@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../../css/students.css";
+import { Users, ActivitySquareIcon, PanelTopInactiveIcon, Edit3Icon, DeleteIcon, UserRoundPen} from 'lucide-react';
 
 const initialStudents = [
   {
@@ -581,21 +582,29 @@ const Students = () => {
       {/* Stats Cards */}
       <div className="stats-row">
         <div className="stat-card-small">
-          <div className="stat-icon-small blue">👨‍🎓</div>
+          <div className="stat-icon-small blue">
+            <Users size={24} />
+          </div>
           <div className="stat-info-small">
             <h3>Total Students</h3>
             <p className="stat-number-small">{totalStudents}</p>
           </div>
         </div>
+        
         <div className="stat-card-small">
-          <div className="stat-icon-small green">✅</div>
+          <div className="stat-icon-small green">
+            <ActivitySquareIcon size={24} />
+          </div>
           <div className="stat-info-small">
             <h3>Active</h3>
             <p className="stat-number-small">{activeStudents}</p>
           </div>
         </div>
+        
         <div className="stat-card-small">
-          <div className="stat-icon-small orange">⏸️</div>
+          <div className="stat-icon-small orange">
+            <PanelTopInactiveIcon size={24} />
+          </div>
           <div className="stat-info-small">
             <h3>Inactive</h3>
             <p className="stat-number-small">{inactiveStudents}</p>
@@ -720,21 +729,21 @@ const Students = () => {
                       title="Edit Grades"
                       onClick={() => openGradesModal(student)}
                     >
-                      📊
+                      <Edit3Icon size={24} />
                     </button>
                     <button
                       className="btn-icon"
                       title="Edit"
                       onClick={() => openEditModal(student)}
                     >
-                      ✏️
+                      <UserRoundPen size={24} />
                     </button>
                     <button
                       className="btn-icon"
                       title="Delete"
                       onClick={() => handleDeleteStudent(student.id)}
                     >
-                      🗑️
+                      <DeleteIcon size={24} />
                     </button>
                   </div>
                 </td>

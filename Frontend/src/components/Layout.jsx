@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../../css/Layout.css';
 import TopNavbar from './topnavbar';
+import { LayoutDashboard, FolderKanban, UsersRound, Settings2Icon } from 'lucide-react';
 
 const Layout = ({ children, currentPage, setCurrentPage }) => {
   const navigate = useNavigate();
@@ -27,28 +28,28 @@ const Layout = ({ children, currentPage, setCurrentPage }) => {
             className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
             onClick={() => setCurrentPage('dashboard')}
           >
-            <span className="nav-icon">📊</span>
+            <span className="nav-icon"><LayoutDashboard size={24} /></span>
             Dashboard
           </button>
           <button 
             className={`nav-item ${currentPage === 'subjects' ? 'active' : ''}`}
             onClick={() => setCurrentPage('subjects')}
           >
-            <span className="nav-icon">📚</span>
+            <span className="nav-icon"><FolderKanban size={24} /></span>
             Manage Subjects
           </button>
           <button 
             className={`nav-item ${currentPage === 'students' ? 'active' : ''}`}
             onClick={() => setCurrentPage('students')}
           >
-            <span className="nav-icon">👨‍🎓</span>
+            <span className="nav-icon"><UsersRound size={24} /></span>
             Students
           </button>
           <button 
             className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
-            <span className="nav-icon">⚙️</span>
+            <span className="nav-icon"><Settings2Icon size={24} /></span>
             Profile Settings
           </button>
         </nav>

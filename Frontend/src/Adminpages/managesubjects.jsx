@@ -34,6 +34,35 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
   });
   const [csrfToken, setCsrfToken] = useState('');
 
+  const getCsrfTokenFromCookie = () => {
+    const match = document.cookie.split('; ').find((row) => row.startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=')[1]) : null;
+  };
+
+  const fetchCsrfToken = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.csrfToken) {
+          setCsrfToken(data.csrfToken);
+          return data.csrfToken;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load CSRF token:', err);
+    }
+
+    const cookieToken = getCsrfTokenFromCookie();
+    if (cookieToken) {
+      setCsrfToken(cookieToken);
+      return cookieToken;
+    }
+    return null;
+  };
+
   // --- API BACKEND OPERATIONS ---
 
   const fetchSubjects = async () => {
@@ -57,56 +86,56 @@ const ManageSubjects = ({ onOpenClass = () => {} }) => {
   }, []);
 
   useEffect(() => {
-    const fetchCsrfToken = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
-          credentials: 'include' 
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setCsrfToken(data.csrfToken);
-        }
-      } catch (err) {
-        console.error('Failed to load CSRF token:', err);
-      }
-    };
     fetchCsrfToken();
   }, []);
 
   const handleAddSubject = async (event) => {
     event.preventDefault();
-    if (!formValues.name.trim()) return;
+    if (!formValues.name.trim()) {
+      toast.error('Please enter a subject name.', { position: 'top-center' });
+      return;
+    }
 
-const payload = {
-    name: formValues.name.trim(),
-    icon: formValues.icon,
-    grade: formValues.grade,
-    sections: formValues.sections.map((section) => ({
-      id: section.id || section.class_id, // 🔑 Maintain the unique class UUID identifier
-      name: section.name,
-      students: Number(section.students) || 0,
-    })),
-  };
+    const subjectName = formValues.name.trim();
+    const payload = {
+      name: subjectName,
+      icon: formValues.icon,
+      grade: formValues.grade,
+      sections: formValues.sections.map((section) => ({
+        id: section.id || section.class_id,
+        name: section.name,
+        class_name: section.class_name || section.name,
+        section_name: section.section_name || '',
+        students: Number(section.students) || 0,
+      })),
+    };
 
     try {
+      const token = await fetchCsrfToken();
+      if (!token) throw new Error('Unable to obtain CSRF token.');
+
       const response = await fetch(`${API_BASE_URL}/subjects`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken 
+          'X-CSRF-Token': token,
         },
-        credentials: 'include', 
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Failed to add new subject.');
 
       closeAddModal();
-      toast.success('Subject added successfully!', { position: "top-center" });
-      fetchSubjects();
+      toast.success(`"${subjectName}" added successfully!`, { position: 'top-center' });
 
+      const fetchResponse = await fetch(`${API_BASE_URL}/subjects`);
+      if (fetchResponse.ok) {
+        const data = await fetchResponse.json();
+        setSubjects(data);
+      }
     } catch (err) {
-      toast.error(`Error adding subject: ${err.message}`, { position: "top-center" });
+      toast.error(`Error adding subject: ${err.message}`, { position: 'top-center' });
     }
   };
 
@@ -120,18 +149,23 @@ const payload = {
       icon: formValues.icon,
       grade: formValues.grade,
       sections: formValues.sections.map((section) => ({
-        id: section.id || section.class_id || section.classId, // 🔑 PRESERVE IDENTIFIER
+        id: section.id || section.class_id || section.classId || null,
         name: section.name,
+        class_name: section.class_name || section.name,
+        section_name: section.section_name || '',
         students: Number(section.students) || 0,
-      })), 
+      })),
     };
 
     try {
+      const token = await fetchCsrfToken();
+      if (!token) throw new Error('Unable to obtain CSRF token.');
+
       const response = await fetch(`${API_BASE_URL}/subjects/${subjectToEdit.id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken 
+          'X-CSRF-Token': token,
         },
         credentials: 'include', 
         body: JSON.stringify(payload),
@@ -157,17 +191,23 @@ const payload = {
     if (!subjectToDelete) return;
 
     try {
+      const token = await fetchCsrfToken();
+      if (!token) throw new Error('Unable to obtain CSRF token.');
+
       const response = await fetch(`${API_BASE_URL}/subjects/${subjectToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-CSRF-Token': csrfToken 
+          'X-CSRF-Token': token,
         },
         credentials: 'include'
       });
 
-      if (!response.ok) throw new Error('Failed to delete subject.');
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.error || json.message || 'Failed to delete subject.');
+      }
 
       setSubjects((prev) => prev.filter((item) => item.id !== subjectToDelete.id));
       closeDeleteModal();
@@ -198,7 +238,17 @@ const openEditModal = (subject) => {
       name: subject.name || '',
       icon: subject.icon || '📘',
       grade: subject.grade || 'Grade 3',
-      sections: subject.classes || subject.sections || [{ name: 'Class A', students: '0' }],
+      sections: (subject.classes || subject.sections || [{ name: 'Class A', students: '0' }]).map((section) => ({
+        id: section.id || section.class_id || section.classId || null,
+        name:
+          section.name ||
+          (section.class_name && section.section_name
+            ? `${section.class_name} - ${section.section_name}`
+            : section.class_name || section.section_name || 'Class A'),
+        class_name: section.class_name || section.name || '',
+        section_name: section.section_name || '',
+        students: section.students || '0',
+      })),
     });
     setShowEditModal(true);
   };
@@ -229,13 +279,38 @@ const openEditModal = (subject) => {
     setFormValues((prev) => ({ ...prev, [name]: value }));
   };
 
+  const parseSectionName = (rawName) => {
+    const name = (rawName || '').toString().trim();
+    if (name.includes(' - ')) {
+      const [class_name, section_name] = name.split(' - ', 2);
+      return {
+        class_name: class_name.trim(),
+        section_name: section_name.trim(),
+      };
+    }
+    return {
+      class_name: name,
+      section_name: '',
+    };
+  };
+
   const handleSectionChange = (index, event) => {
     const { name, value } = event.target;
     setFormValues((prev) => ({
       ...prev,
-      sections: prev.sections.map((section, idx) =>
-        idx === index ? { ...section, [name]: value } : section
-      ),
+      sections: prev.sections.map((section, idx) => {
+        if (idx !== index) return section;
+        const updated = { ...section, [name]: value };
+        if (name === 'name') {
+          const parsed = parseSectionName(value);
+          return {
+            ...updated,
+            class_name: parsed.class_name,
+            section_name: parsed.section_name,
+          };
+        }
+        return updated;
+      }),
     }));
   };
 
@@ -293,7 +368,7 @@ const openEditModal = (subject) => {
 
   return (
     <div className="manage-subjects">
-      <ToastContainer autoClose={3000} hideProgressBar={false} />
+      <ToastContainer position="top-center" autoClose={3000} hideProgressBar={false} style={{ zIndex: 99999 }} />
 
       <div className="page-header">
         <h1>Manage Subjects</h1>
@@ -341,10 +416,14 @@ const openEditModal = (subject) => {
             </div>
             
             <div className="subject-actions" style={{ display: 'flex', gap: '8px', marginTop: '15px' }}>
-<button 
+              <button 
                 className="btn-primary" 
                 style={{ flex: 1, padding: '8px' }}
-                onClick={() => onOpenClass(subject.name, subject.id, subject.classes?.[0]?.name || 'Class A')}
+                onClick={() => {
+                  const section = (subject.classes || subject.sections || [])[0] || {};
+                  const displayName = section.name || (section.class_name && section.section_name ? `${section.class_name} - ${section.section_name}` : section.class_name || section.section_name) || 'Class A';
+                  onOpenClass(subject.name, subject.id, displayName, section.id || section.class_id || null);
+                }}
               >
                 Open Class
               </button>

@@ -23,6 +23,7 @@ const LayoutWrapper = () => {
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedSubjectId, setSelectedSubjectId] = useState(""); 
   const [selectedSection, setSelectedSection] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState("");
 
 const renderPage = () => {
     switch (currentPage) {
@@ -31,10 +32,11 @@ const renderPage = () => {
       case "subjects":
         return (
           <ManageSubjects
-            onOpenClass={(subjectName, subjectId, section) => { 
+            onOpenClass={(subjectName, subjectId, section, sectionId) => { 
               setSelectedSubject(subjectName);
               setSelectedSubjectId(subjectId); 
               setSelectedSection(section || "Class A");
+              setSelectedSectionId(sectionId || "");
               setCurrentPage("viewgrades");
             }}
           />
@@ -49,6 +51,7 @@ const renderPage = () => {
             selectedSubject={selectedSubject}
             selectedSubjectId={selectedSubjectId}
             selectedSection={selectedSection}
+            selectedSectionId={selectedSectionId}
             onBack={() => setCurrentPage("subjects")}
           />
         );

@@ -4,19 +4,23 @@ import '../../css/viewgrades.css';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBack }) => {
+const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, selectedSectionId, onBack }) => {
   const [sectionsList, setSectionsList] = useState([]);
   
   // 1. Initialize activeTab state FIRST
   const [activeTab, setActiveTab] = useState(selectedSection || '');
 
   // 2. Safely run the find operation AFTER activeTab is initialized
-  const activeClassId = sectionsList.find(s => s.name === activeTab)?.id || null;
+  const activeClassId = sectionsList.find((s) => {
+    const sectionName = s.displayName || s.name || s.class_name || s.section_name || '';
+    return sectionName === activeTab || s.id === selectedSectionId;
+  })?.id || sectionsList?.[0]?.id || null;
   
   // 3. Declare the rest of your states
   const [grades, setGrades] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, studentId: null });
 
   // Inline Spreadsheet Editing Tracking States
   const [editingCell, setEditingCell] = useState(null);
@@ -24,26 +28,46 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
   
   // Student Modal Toggle States
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [newStudent, setNewStudent] = useState({ name: '' });
+  const [newStudent, setNewStudent] = useState({ id: '', name: '' });
 
   // --- STATE FOR ENROLLED STUDENTS LIST ---
   const [enrolledStudents, setEnrolledStudents] = useState([]); 
-  const [csrfToken, setCsrfToken] = useState(''); // 🔑 Add this state
+  const [csrfToken, setCsrfToken] = useState(''); 
+
+  const getCsrfTokenFromCookie = () => {
+    const match = document.cookie.split('; ').find((row) => row.startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=')[1]) : null;
+  };
+
+  const fetchCsrfToken = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
+        credentials: 'include',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.csrfToken) {
+          setCsrfToken(data.csrfToken);
+          return data.csrfToken;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load CSRF token:', err);
+    }
+
+    const cookieToken = getCsrfTokenFromCookie();
+    if (cookieToken) {
+      setCsrfToken(cookieToken);
+      return cookieToken;
+    }
+    return null;
+  };
 
   useEffect(() => {
-    const fetchCsrfToken = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/auth/csrf-token', {
-          credentials: 'include' 
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setCsrfToken(data.csrfToken);
-        }
-      } catch (err) {
-        console.error('Failed to load CSRF token:', err);
-      }
-    };
     fetchCsrfToken();
   }, []);
 
@@ -62,12 +86,23 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
         setSectionsList(data);
         
         if (data && data.length > 0) {
-          // Fallback to selectedSection or the first item's name
-          setActiveTab(selectedSection || data[0].name || 'Class A');
+          const normalized = data.map((section) => ({
+            ...section,
+            displayName: section.name || section.class_name || section.section_name || 'Class A'
+          }));
+
+          const firstSection = normalized[0];
+          const selectedName = selectedSection || firstSection.displayName;
+          const matchedSection = normalized.find((s) => s.displayName === selectedName || s.id === selectedSectionId);
+
+          setSectionsList(normalized);
+          setActiveTab(matchedSection ? matchedSection.displayName : firstSection.displayName);
+        } else {
+          setSectionsList([]);
+          setActiveTab('');
         }
       } catch (err) {
         console.error("Error loading sections:", err);
-        // Do not use arbitrary fallbacks that lack real UUIDs
         setSectionsList([]);
       } finally {
         setIsLoading(false);
@@ -75,24 +110,69 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
     };
 
     fetchSections();
-  }, [selectedSubject, selectedSection, selectedSubjectId]);
+  }, [selectedSubject, selectedSection, selectedSubjectId, selectedSectionId]);
+
+  const fetchStudentName = async (studentId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/students/${studentId}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      return json.data?.name || null;
+    } catch (err) {
+      console.error('Error fetching student name:', err);
+      return null;
+    }
+  };
+
+  const populateStudentNames = async (gradeRows) => {
+    const missingNameIds = Array.from(
+      new Set(
+        gradeRows
+          .filter((row) => !row.student_name && row.student_id)
+          .map((row) => row.student_id),
+      ),
+    );
+
+    if (missingNameIds.length === 0) {
+      return gradeRows;
+    }
+
+    const nameMap = {};
+    await Promise.all(
+      missingNameIds.map(async (studentId) => {
+        const name = await fetchStudentName(studentId);
+        if (name) {
+          nameMap[studentId] = name;
+        }
+      }),
+    );
+
+    return gradeRows.map((row) => ({
+      ...row,
+      student_name: row.student_name || nameMap[row.student_id] || row.student_name,
+    }));
+  };
 
   // 2. FETCH GRADES FOR THE ACTIVE CLASS SECTION
   const fetchClassGrades = async () => {
-    if (!activeTab) return;
+    if (!activeClassId) {
+      setGrades([]);
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/grades`);
-      if (res.ok) {
-        const json = await res.json();
-        const allGrades = json.data || [];
-        
-        const filtered = allGrades.filter(g => 
-          (g.class_name === activeTab || g.class_id === activeTab) && 
-          (g.subject_name === selectedSubject)
-        );
-        
-        setGrades(filtered);
-      }
+      const res = await fetch(`${API_BASE_URL}/grades/class/${activeClassId}`);
+      if (!res.ok) throw new Error('Failed to fetch grades');
+
+      const json = await res.json();
+      const classGrades = json.data || [];
+      const gradesWithNames = await populateStudentNames(classGrades);
+
+      const filtered = selectedSubjectId
+        ? gradesWithNames.filter((g) => g.subject_id === selectedSubjectId)
+        : gradesWithNames;
+
+      setGrades(filtered);
     } catch (err) {
       console.error('Error fetching grades:', err);
       setGrades([]);
@@ -101,27 +181,54 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
 
   useEffect(() => {
     fetchClassGrades();
-  }, [activeTab, selectedSubject]);
+  }, [activeClassId, selectedSubjectId]);
 
   // 3. Fetch students assigned to this specific grade/section when the modal opens
   useEffect(() => {
     const fetchEnrolledStudents = async () => {
       try {
-        // Calls your /api/students endpoint filtering dynamically by Grade Level and Section Name
-        const response = await fetch(`${API_BASE_URL}/students?grade=${selectedSubject || ''}&section=${activeTab}`);
-        if (response.ok) {
-          const data = await response.json();
-          setEnrolledStudents(Array.isArray(data) ? data : data.data || []);
+        const sectionName = activeTab;
+        let response = await fetch(`${API_BASE_URL}/students/section/${encodeURIComponent(sectionName)}`);
+
+        let json = await response.json();
+        let allStudents = json.data || [];
+
+        if (!Array.isArray(allStudents) || allStudents.length === 0) {
+          const fallbackResponse = await fetch(`${API_BASE_URL}/students`);
+          if (fallbackResponse.ok) {
+            const fallbackJson = await fallbackResponse.json();
+            allStudents = fallbackJson.data || [];
+          }
         }
+
+        const normalizedSectionName = sectionName.toString().trim().toLowerCase();
+        const filteredStudents = Array.isArray(allStudents)
+          ? allStudents.filter((student) => {
+              const studentSection = (
+                student.section || student.className || student.class_name || student.subject_section || ''
+              )
+                .toString()
+                .trim()
+                .toLowerCase();
+              return (
+                studentSection === normalizedSectionName ||
+                studentSection.includes(normalizedSectionName) ||
+                normalizedSectionName.includes(studentSection)
+              );
+            })
+          : [];
+
+        setEnrolledStudents(filteredStudents.length > 0 ? filteredStudents : allStudents);
       } catch (err) {
         console.error("Failed to load enrolled students:", err);
+        setEnrolledStudents([]);
       }
     };
-    
+
     if (showAddStudentModal && activeTab) {
       fetchEnrolledStudents();
     }
-  }, [showAddStudentModal, activeTab, selectedSubject]);
+  }, [showAddStudentModal, activeTab]);
 
   // --- ARITHMETIC UTILITIES ---
   const calculateDerivedValues = (student) => {
@@ -145,7 +252,7 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
     setEditValue(e.target.value);
   };
 
-  const handleCellBlur = () => {
+const handleCellBlur = () => {
     if (editingCell) {
       const { studentId, field } = editingCell;
       let newValue = parseFloat(editValue);
@@ -157,6 +264,25 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
       setGrades(prev => prev.map(student => {
         if (student.id === studentId) {
           const updatedStudent = { ...student, [field]: newValue };
+          
+          // 🔑 FIX: Sync both variable names so the backend doesn't overwrite your new grade with a lingering 0
+          if (field === 'q1_grade' || field === 'preliminary' || field === 'preliminary_grade') {
+            updatedStudent.q1_grade = newValue;
+            updatedStudent.preliminary_grade = newValue;
+          }
+          if (field === 'q2_grade' || field === 'midterm' || field === 'midterm_grade') {
+            updatedStudent.q2_grade = newValue;
+            updatedStudent.midterm_grade = newValue;
+          }
+          if (field === 'q3_grade' || field === 'final' || field === 'final_grade') {
+            updatedStudent.q3_grade = newValue;
+            updatedStudent.final_grade = newValue;
+          }
+          if (field === 'q4_grade' || field === 'fourth' || field === 'fourth_period_grade') {
+            updatedStudent.q4_grade = newValue;
+            updatedStudent.fourth_period_grade = newValue;
+          }
+
           const { average, remarks } = calculateDerivedValues(updatedStudent);
           return { ...updatedStudent, average_grade: average, remarks };
         }
@@ -175,14 +301,34 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
   const handleBulkSaveChanges = async () => {
     try {
       setIsSaving(true);
+      const token = csrfToken || (await fetchCsrfToken());
+      if (!token) throw new Error('Unable to obtain CSRF token.');
+
       const response = await fetch(`${API_BASE_URL}/grades/bulk-update`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': token,
+        },
+        credentials: 'include',
         body: JSON.stringify({ grades }),
       });
 
-      if (!response.ok) throw new Error('Database updates rejected.');
-      toast.success('Grades saved successfully! 💾', { position: 'top-center' });
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || json.message || 'Database updates rejected.');
+      }
+
+      if (Array.isArray(json.data)) {
+        setGrades(prevGrades =>
+          prevGrades.map(oldGrade => {
+            const updatedGrade = json.data.find(newData => newData.id === oldGrade.id);
+            return updatedGrade ? { ...updatedGrade, student_name: oldGrade.student_name } : oldGrade;
+          })
+        );
+      }
+
+      toast.success('Grades saved successfully!', { position: 'top-center' });
     } catch (err) {
       toast.error(`Failed to sync changes: ${err.message}`, { position: 'top-center' });
     } finally {
@@ -190,91 +336,155 @@ const ViewGrades = ({ selectedSubject, selectedSubjectId, selectedSection, onBac
     }
   };
 
+  // --- SINGLE SAVE OPERATION ---
+  const handleSaveSingleGrade = async (student) => {
+    try {
+      const token = csrfToken || (await fetchCsrfToken());
+      if (!token) throw new Error('Unable to obtain CSRF token.');
+
+      const response = await fetch(`${API_BASE_URL}/grades/${student.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': token,
+        },
+        credentials: 'include',
+        body: JSON.stringify(student),
+      });
+
+      if (!response.ok) {
+        const json = await response.json();
+        throw new Error(json.error || 'Failed to save grade');
+      }
+
+      toast.success(`Saved grades for ${student.student_name}!`, { position: 'top-center' });
+    } catch (err) {
+      toast.error(`Failed to save: ${err.message}`, { position: 'top-center' });
+    }
+  };
+
   // --- ADD STUDENT HANDLERS ---
-  const openAddStudentModal = () => {
-    setNewStudent({ name: '' });
+  const openAddStudentModal = async () => {
+    setNewStudent({ id: '', name: '' });
+    setEnrolledStudents([]);
+    await fetchCsrfToken();
     setShowAddStudentModal(true);
   };
 
-  const closeAddStudentModal = () => setShowAddStudentModal(false);
+  const closeAddStudentModal = () => {
+    setShowAddStudentModal(false);
+    setNewStudent({ id: '', name: '' });
+  };
 
   const handleNewStudentChange = (e) => {
     const { name, value } = e.target;
-    setNewStudent(prev => ({ ...prev, [name]: value }));
+    const student = enrolledStudents.find((stu) => stu.name === value);
+    setNewStudent(prev => ({ ...prev, [name]: value, id: student?.id || '' }));
   };
+
 
  // Inside viewgrades.jsx (handleAddStudentSubmit)
 const handleAddStudentSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (!activeClassId) {
-    toast.error("Please ensure a valid section/class is assigned to this subject first.", { position: "top-center" });
-    return;
-  }
-    const studentName = newStudent.name ? newStudent.name.trim() : "";
-    if (!studentName) return;
+    const resolvedClassId = activeClassId || sectionsList?.[0]?.id || null;
+    if (!resolvedClassId) {
+      toast.error("Please ensure a valid section/class is assigned to this subject first.", { position: "top-center" });
+      return;
+    }
 
-    const payload = {
-      student_name: studentName,
-      subject_name: selectedSubject || "Scienceeeee", 
-      class_name: activeTab || "Class A",
-      class_id: activeClassId, 
-      subject_id: selectedSubjectId,
-      preliminary_grade: 0,
-      midterm_grade: 0,
-      final_grade: 0,
-      fourth_period_grade: 0,
-      average_grade: 0,
-      remarks: "Failed",
-      school_year: "2026-2027",
-      grading_period: "1st Semester"
-    };
+    let studentId = newStudent.id;
+    let studentName = newStudent.name ? newStudent.name.trim() : "";
 
     try {
-      console.log("Submitting student payload:", { studentName, activeTab, selectedSubjectId });
+      const token = await fetchCsrfToken();
+      if (!token) {
+        toast.error('Unable to load CSRF token. Please refresh and try again.', { position: 'top-center' });
+        return;
+      }
+
+      if (!studentName) {
+        toast.error('Please select or enter a student name.', { position: 'top-center' });
+        return;
+      }
+
+      const payload = {
+        student_id: studentId || undefined,
+        student_name: studentName,
+        subject_name: selectedSubject || '',
+        class_name: activeTab || sectionsList?.[0]?.name || 'Class A',
+        class_id: resolvedClassId,
+        subject_id: selectedSubjectId,
+        preliminary_grade: 0,
+        midterm_grade: 0,
+        final_grade: 0,
+        fourth_period_grade: 0,
+        average_grade: 0,
+        remarks: 'Failed',
+        school_year: '2026-2027',
+        grading_period: '1st Semester',
+      };
+
       const response = await fetch(`${API_BASE_URL}/grades`, {
         method: 'POST',
-        headers: { 
+        mode: 'cors',
+        headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken // 🔑 ATTACH CSRF TOKEN
+          'Accept': 'application/json',
+          'X-CSRF-Token': token,
         },
-        credentials: 'include', // 🔑 INCLUDE CREDENTIALS SESSION
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
 
       const json = await response.json();
-
       if (!response.ok) {
         throw new Error(json.error || 'Could not assign student entry.');
       }
-      
+
       toast.success('Student assigned to subject successfully!', { position: 'top-center' });
-      
+
       const addedRow = {
         id: json.data?.id || crypto.randomUUID(),
         student_name: studentName,
-        ...payload
+        ...payload,
       };
-      
-      setGrades(prev => [...prev, addedRow]);
-      closeAddStudentModal();
+      setGrades((prev) => [...prev, addedRow]);
     } catch (err) {
       toast.error(`${err.message}`, { position: 'top-center' });
     }
   };
 
   // --- DELETE ENTRY ---
-  const handleDeleteStudent = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this grading sheet row?')) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}/grades/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed to drop column row.');
-      toast.success('Record dropped.', { position: 'top-center' });
-      setGrades(prev => prev.filter(item => item.id !== id));
-    } catch (err) {
-      toast.error(err.message, { position: 'top-center' });
-    }
-  };
+const confirmDelete = (id) => {
+  setDeleteModal({ isOpen: true, studentId: id });
+};
+
+const executeDelete = async () => {
+  const { studentId } = deleteModal;
+  try {
+    const token = await fetchCsrfToken();
+    if (!token) throw new Error('Unable to obtain CSRF token.');
+
+    const response = await fetch(`${API_BASE_URL}/grades/${studentId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': token,
+      },
+      credentials: 'include',
+    });
+    
+    if (!response.ok) throw new Error('Failed to delete record.');
+    
+    toast.success('Record dropped successfully.', { position: 'top-center' });
+    setGrades(prev => prev.filter(item => item.id !== studentId));
+  } catch (err) {
+    toast.error(err.message, { position: 'top-center' });
+  } finally {
+    setDeleteModal({ isOpen: false, studentId: null });
+  }
+};
 
   // --- PRESENTATION RENDERING ---
   const renderCell = (student, databaseField, localFallbackField) => {
@@ -346,8 +556,7 @@ const handleAddStudentSubmit = async (e) => {
       <div className="tabs-container">
         <div className="tabs">
           {sectionsList.map((section) => {
-            // 🔑 Standardize reading the name whether it comes as name, class_name, or section_name
-            const sectionName = section.name || section.class_name || section.section_name || 'Class A';
+            const sectionName = section.displayName || section.name || section.class_name || section.section_name || 'Class A';
             return (
               <button
                 key={section.id || sectionName}
@@ -368,11 +577,25 @@ const handleAddStudentSubmit = async (e) => {
             <span className="info-item"><strong>Section:</strong> {activeTab}</span>
             <span className="info-item"><strong>Students:</strong> {totalStudents}</span>
           </div>
-          <div className="toolbar-actions">
-            <button className="btn-toolbar btn-toolbar-primary" onClick={openAddStudentModal}>Add Student</button>
-            <button className="btn-toolbar" onClick={() => window.print()}>Print Report</button>
+            <div className="toolbar-actions">
+              <button className="btn-toolbar btn-toolbar-primary" onClick={openAddStudentModal}>
+                + Add Student
+              </button>
+              <button 
+                className="btn-toolbar" 
+                onClick={() => window.print()}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                {/* SVG Icon for better visuals */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print Report
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Add Student Modal */}
         {showAddStudentModal && (
@@ -411,6 +634,23 @@ const handleAddStudentSubmit = async (e) => {
           </div>
         )}
 
+        {deleteModal.isOpen && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h2>Confirm Deletion</h2>
+              </div>
+              <div className="modal-body">
+                <p>Are you sure you want to remove this student's grade entry? This action cannot be undone.</p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-secondary" onClick={() => setDeleteModal({ isOpen: false, studentId: null })}>Cancel</button>
+                <button className="btn-primary" style={{ backgroundColor: '#dc3545' }} onClick={executeDelete}>Delete Permanently</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="excel-table-wrapper">
           <table className="excel-table">
             <thead>
@@ -433,15 +673,27 @@ const handleAddStudentSubmit = async (e) => {
                 return (
                   <tr key={student.id}>
                     <td className="col-id">{index + 1}</td>
-                    <td className="col-name">{student.student_name || student.name}</td>
+                    <td className="col-name">{student.student_name || student.name || student.student_id || 'Unknown Student'}</td>
                     <td className="col-grade">{renderCell(student, 'q1_grade', 'preliminary')}</td>
                     <td className="col-grade">{renderCell(student, 'q2_grade', 'midterm')}</td>
                     <td className="col-grade">{renderCell(student, 'q3_grade', 'final')}</td>
                     <td className="col-grade">{renderCell(student, 'q4_grade', 'fourth')}</td>
                     <td className={`col-average ${getAverageColor(currentAvg)}`}>{currentAvg}</td>
                     <td className={`col-remarks ${currentRemarks.toLowerCase()}`}>{currentRemarks}</td>
-                    <td className="col-actions">
-                      <button className="btn-action delete" onClick={() => handleDeleteStudent(student.id)}>Delete</button>
+                    <td className="col-actions" style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="btn-action save" 
+                        style={{ backgroundColor: '#28a745', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}
+                        onClick={() => handleSaveSingleGrade(student)}
+                      >
+                        Save
+                      </button>
+                      <button 
+                        className="btn-action delete" 
+                        onClick={() => confirmDelete(student.id)}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 );
