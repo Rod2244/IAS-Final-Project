@@ -1,8 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../../css/students.css";
-import { Users, ActivitySquareIcon, PanelTopInactiveIcon, Edit3Icon, DeleteIcon, UserRoundPen} from 'lucide-react';
+import {
+  Users,
+  ActivitySquareIcon,
+  PanelTopInactiveIcon,
+  Edit3Icon,
+  DeleteIcon,
+  UserRoundPen,
+} from "lucide-react";
 
 const initialStudents = [
   {
@@ -119,6 +126,16 @@ const initialStudents = [
   },
 ];
 
+const getStoredStudentPasswords = () => {
+  try {
+    const stored = localStorage.getItem("studentPasswords");
+    return stored ? JSON.parse(stored) : {};
+  } catch (error) {
+    console.error("Failed to read stored student passwords:", error);
+    return {};
+  }
+};
+
 const Students = () => {
   const [students, setStudents] = useState(initialStudents);
   const [showModal, setShowModal] = useState(false);
@@ -133,6 +150,9 @@ const Students = () => {
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [createAccountChecked, setCreateAccountChecked] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [studentPasswords, setStudentPasswords] = useState(
+    getStoredStudentPasswords,
+  );
   const [gradesData, setGradesData] = useState({
     philippine_history: { q1: "", q2: "", q3: "", q4: "" },
     filipino: { q1: "", q2: "", q3: "", q4: "" },
@@ -159,6 +179,53 @@ const Students = () => {
     password: "",
   });
 
+  useEffect(() => {
+    localStorage.setItem("studentPasswords", JSON.stringify(studentPasswords));
+  }, [studentPasswords]);
+
+  const fetchStudents = async (passwordLookup = studentPasswords) => {
+    try {
+      const response = await fetch("http://localhost:5000/api/students", {
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch students");
+      }
+
+      const normalizedStudents = (data.data || []).map((student) => ({
+        id: student.id,
+        name: student.name || "",
+        lrn: student.lrn || "",
+        grade: student.grade || "Grade 3",
+        class: student.section || student.class || "Class A",
+        status: student.status || "Active",
+        dob: student.date_of_birth || "",
+        gender: student.gender || "",
+        address: student.address || "",
+        parent: student.parent_name || "",
+        contact: student.parent_contact || "",
+        email: student.email || "",
+        password:
+          passwordLookup[student.id] ||
+          passwordLookup[String(student.id)] ||
+          student.password ||
+          student.temporary_password ||
+          student.tempPassword ||
+          "",
+      }));
+
+      setStudents(normalizedStudents);
+    } catch (error) {
+      console.error("Fetch students error:", error);
+      toast.error("Unable to load students from the server.");
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
   const openAddModal = () => {
     setEditingStudent(null);
     setCreateAccountChecked(false);
@@ -182,16 +249,16 @@ const Students = () => {
   const openEditModal = (student) => {
     setEditingStudent(student.id);
     setFormData({
-      name: student.name,
-      lrn: student.lrn,
-      grade: student.grade,
-      class: student.class,
-      status: student.status,
-      dob: student.dob || "",
+      name: student.name || "",
+      lrn: student.lrn || "",
+      grade: student.grade || "Grade 3",
+      class: student.class || student.section || "Class A",
+      status: student.status || "Active",
+      dob: student.dob || student.date_of_birth || "",
       gender: student.gender || "",
       address: student.address || "",
-      parent: student.parent || "",
-      contact: student.contact || "",
+      parent: student.parent || student.parent_name || "",
+      contact: student.contact || student.parent_contact || "",
       password: student.password || "",
     });
     setShowModal(true);
@@ -249,10 +316,53 @@ const Students = () => {
 
   const handleRegenerateTempPassword = () => {
     const newPassword = generateRandomPassword();
-    setTempPasswordData((prev) => ({
-      ...prev,
-      tempPassword: newPassword,
-    }));
+    setTempPasswordData((prev) => {
+      const nextValue = {
+        ...prev,
+        tempPassword: newPassword,
+      };
+      if (nextValue?.studentId) {
+        setStudentPasswords((prevPasswords) => ({
+          ...prevPasswords,
+          [nextValue.studentId]: newPassword,
+        }));
+      }
+      return nextValue;
+    });
+  };
+
+  const handleSendTempPassword = async () => {
+    if (!tempPasswordData?.email || !tempPasswordData?.tempPassword) {
+      toast.error("No student email or temporary password available.");
+      return;
+    }
+
+    try {
+      const headers = await getCsrfHeaders();
+      const response = await fetch(
+        "http://localhost:5000/api/students/admin/send-temp-password",
+        {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            email: tempPasswordData.email,
+            name: tempPasswordData.name,
+            tempPassword: tempPasswordData.tempPassword,
+          }),
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send password email.");
+      }
+
+      toast.success("Temporary password sent to the student email.");
+    } catch (error) {
+      toast.error(`Error sending email: ${error.message}`);
+      console.error("Send temp password error:", error);
+    }
   };
 
   // Helper function to get CSRF token from cookies
@@ -289,10 +399,62 @@ const Students = () => {
     return "";
   };
 
+  const getCsrfHeaders = async () => {
+    let csrfToken = getCsrfToken();
+    if (!csrfToken) {
+      csrfToken = await fetchCsrfToken();
+    }
+
+    return {
+      "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    };
+  };
+
+  const buildStudentPayload = (studentFormData) => ({
+    name: studentFormData.name,
+    lrn: studentFormData.lrn,
+    grade: studentFormData.grade,
+    section: studentFormData.class,
+    status: studentFormData.status,
+    date_of_birth: studentFormData.dob,
+    gender: studentFormData.gender,
+    address: studentFormData.address,
+    parent_name: studentFormData.parent,
+    parent_contact: studentFormData.contact,
+  });
+
   const handleSaveStudent = async (event) => {
     event.preventDefault();
 
-    // If creating account, call the API endpoint
+    if (editingStudent) {
+      try {
+        const headers = await getCsrfHeaders();
+        const response = await fetch(
+          `http://localhost:5000/api/students/${editingStudent}`,
+          {
+            method: "PUT",
+            headers,
+            credentials: "include",
+            body: JSON.stringify(buildStudentPayload(formData)),
+          },
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to update student");
+        }
+
+        toast.success("Student updated successfully");
+        await fetchStudents();
+        closeModal();
+      } catch (error) {
+        toast.error(`Error updating student: ${error.message}`);
+        console.error("Update student error:", error);
+      }
+      return;
+    }
+
     if (createAccountChecked) {
       if (!formData.email) {
         toast.error("Email is required to create an account");
@@ -301,19 +463,12 @@ const Students = () => {
 
       setIsCreatingAccount(true);
       try {
-        // First, try to get token from cookies; if not found, fetch from server
-        let csrfToken = getCsrfToken();
-        if (!csrfToken) {
-          csrfToken = await fetchCsrfToken();
-        }
+        const headers = await getCsrfHeaders();
         const response = await fetch(
           "http://localhost:5000/api/students/admin/create-account",
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-Token": csrfToken,
-            },
+            headers,
             credentials: "include",
             body: JSON.stringify({
               name: formData.name,
@@ -336,32 +491,23 @@ const Students = () => {
           throw new Error(data.error || "Failed to create student account");
         }
 
-        // Show temporary password modal
+        const createdStudentId = data.student?.id;
+        const createdPassword = data.temporaryPassword;
+        const updatedPasswords = {
+          ...studentPasswords,
+          [createdStudentId]: createdPassword,
+        };
+
         setTempPasswordData({
+          studentId: createdStudentId,
           name: formData.name,
           email: formData.email,
-          tempPassword: data.temporaryPassword,
+          tempPassword: createdPassword,
         });
+        setStudentPasswords(updatedPasswords);
         setShowTempPasswordModal(true);
 
-        // Add to local students list
-        setStudents((prev) => [
-          ...prev,
-          {
-            id: data.student.id,
-            name: formData.name,
-            lrn: formData.lrn,
-            grade: formData.grade,
-            class: formData.class,
-            status: "Active",
-            dob: formData.dob,
-            gender: formData.gender,
-            address: formData.address,
-            parent: formData.parent,
-            contact: formData.contact,
-            email: formData.email,
-          },
-        ]);
+        await fetchStudents(updatedPasswords);
 
         closeModal();
       } catch (error) {
@@ -371,40 +517,109 @@ const Students = () => {
         setIsCreatingAccount(false);
       }
     } else {
-      // Original behavior: just update local state without account creation
-      if (editingStudent) {
-        setStudents((prev) =>
-          prev.map((student) =>
-            student.id === editingStudent
-              ? { ...student, ...formData }
-              : student,
-          ),
-        );
-      } else {
-        setStudents((prev) => [
-          ...prev,
-          {
-            id: Date.now(),
-            ...formData,
-            password: formData.password || "default123",
-          },
-        ]);
+      try {
+        const headers = await getCsrfHeaders();
+        const response = await fetch("http://localhost:5000/api/students", {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify(buildStudentPayload(formData)),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to create student");
+        }
+
+        toast.success("Student created successfully");
+        await fetchStudents();
+        closeModal();
+      } catch (error) {
+        toast.error(`Error creating student: ${error.message}`);
+        console.error("Create student error:", error);
+      }
+    }
+  };
+
+  const handleDeleteStudent = async (id) => {
+    if (!window.confirm("Delete this student?")) {
+      return;
+    }
+
+    try {
+      const headers = await getCsrfHeaders();
+      const response = await fetch(`http://localhost:5000/api/students/${id}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete student");
       }
 
-      closeModal();
-    }
-  };
-
-  const handleDeleteStudent = (id) => {
-    if (window.confirm("Delete this student?")) {
       setStudents((prev) => prev.filter((student) => student.id !== id));
       toast.success("Student deleted successfully");
+    } catch (error) {
+      toast.error(`Error deleting student: ${error.message}`);
+      console.error("Delete student error:", error);
     }
   };
 
-  const openViewModal = (student) => {
-    setViewingStudent(student);
-    setShowViewModal(true);
+  const openViewModal = async (student) => {
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/students/${student.id}`,
+        {
+          credentials: "include",
+        },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load student details");
+      }
+
+      const passwordValue =
+        studentPasswords[student.id] ||
+        studentPasswords[String(student.id)] ||
+        (tempPasswordData?.studentId === student.id
+          ? tempPasswordData.tempPassword
+          : "") ||
+        data.data?.password ||
+        student.password ||
+        student.tempPassword ||
+        student.temporary_password ||
+        "";
+
+      setViewingStudent({
+        ...student,
+        ...data.data,
+        password: passwordValue,
+      });
+      setShowPassword(true);
+      setShowViewModal(true);
+    } catch (error) {
+      console.error("Open view modal error:", error);
+      const passwordValue =
+        studentPasswords[student.id] ||
+        studentPasswords[String(student.id)] ||
+        (tempPasswordData?.studentId === student.id
+          ? tempPasswordData.tempPassword
+          : "") ||
+        student.password ||
+        student.tempPassword ||
+        student.temporary_password ||
+        "";
+
+      setViewingStudent({
+        ...student,
+        password: passwordValue,
+      });
+      setShowPassword(true);
+      setShowViewModal(true);
+    }
   };
 
   const closeViewModal = () => {
@@ -456,7 +671,6 @@ const Students = () => {
   const handleSaveGrades = async (event) => {
     event.preventDefault();
 
-    // Validate that at least one subject has all quarters filled
     const subjectsToSave = [];
     const subjectNames = [
       "Filipino",
@@ -481,15 +695,12 @@ const Students = () => {
       const key = subjectKeys[i];
       const grades = gradesData[key];
 
-      // Check if any quarter has a value
       if (grades.q1 || grades.q2 || grades.q3 || grades.q4) {
-        // If any quarter is filled, all must be filled
         if (!grades.q1 || !grades.q2 || !grades.q3 || !grades.q4) {
           toast.error(`${subjectNames[i]}: All quarterly grades are required`);
           return;
         }
 
-        // Validate grades are 0-100
         const q1 = parseFloat(grades.q1);
         const q2 = parseFloat(grades.q2);
         const q3 = parseFloat(grades.q3);
@@ -515,12 +726,12 @@ const Students = () => {
 
         const average = ((q1 + q2 + q3 + q4) / 4).toFixed(2);
         subjectsToSave.push({
-          subject: subjectNames[i],
-          q1: q1,
-          q2: q2,
-          q3: q3,
-          q4: q4,
-          average: average,
+          subjectName: subjectNames[i],
+          q1,
+          q2,
+          q3,
+          q4,
+          average,
         });
       }
     }
@@ -531,27 +742,40 @@ const Students = () => {
     }
 
     try {
-      // Save all grades at once
-      const response = await fetch("http://localhost:5000/api/grades/batch", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          student_id: editingStudentForGrades.id,
-          student_name: editingStudentForGrades.name,
-          class_name: editingStudentForGrades.class,
-          grade_level: editingStudentForGrades.grade,
-          grades: subjectsToSave,
-          remarks: gradesData.remarks || "Completed",
-        }),
-      });
+      const headers = await getCsrfHeaders();
+      for (const subject of subjectsToSave) {
+        const response = await fetch("http://localhost:5000/api/grades", {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            student_id: editingStudentForGrades.id,
+            student_name: editingStudentForGrades.name,
+            class_name:
+              editingStudentForGrades.class ||
+              editingStudentForGrades.section ||
+              "Class A",
+            subject_name: subject.subjectName,
+            grade_level: editingStudentForGrades.grade || "Grade 3",
+            preliminary_grade: subject.q1,
+            midterm_grade: subject.q2,
+            final_grade: subject.q3,
+            fourth_period_grade: subject.q4,
+            q1_grade: subject.q1,
+            q2_grade: subject.q2,
+            q3_grade: subject.q3,
+            q4_grade: subject.q4,
+            school_year: "2026-2027",
+            grading_period: "1st Semester",
+          }),
+        });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save grades");
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data.error || `Failed to save ${subject.subjectName}`,
+          );
+        }
       }
 
       toast.success(
@@ -590,7 +814,7 @@ const Students = () => {
             <p className="stat-number-small">{totalStudents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card-small">
           <div className="stat-icon-small green">
             <ActivitySquareIcon size={24} />
@@ -600,7 +824,7 @@ const Students = () => {
             <p className="stat-number-small">{activeStudents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card-small">
           <div className="stat-icon-small orange">
             <PanelTopInactiveIcon size={24} />
@@ -854,50 +1078,6 @@ const Students = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Student Portal Password *</label>
-                    <div className="password-input-wrapper">
-                      <input
-                        type={showEditPassword ? "text" : "password"}
-                        name="password"
-                        value={formData.password}
-                        onChange={handleFormChange}
-                        placeholder="Enter portal password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="btn-password-toggle"
-                        onClick={() => setShowEditPassword(!showEditPassword)}
-                        title={
-                          showEditPassword ? "Hide password" : "Show password"
-                        }
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          {showEditPassword ? (
-                            <>
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                              <circle cx="12" cy="12" r="3"></circle>
-                            </>
-                          ) : (
-                            <>
-                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                              <line x1="1" y1="1" x2="23" y2="23"></line>
-                            </>
-                          )}
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="form-group">
                     <label>Gender</label>
                     <select
                       name="gender"
@@ -1034,47 +1214,6 @@ const Students = () => {
                   <div className="view-field">
                     <label>Gender</label>
                     <p>{viewingStudent.gender}</p>
-                  </div>
-                </div>
-                <div className="view-row">
-                  <div className="view-field">
-                    <label>Student Portal Password</label>
-                    <div className="password-display">
-                      <p>
-                        {showPassword
-                          ? viewingStudent.password
-                          : "•".repeat((viewingStudent.password || "").length)}
-                      </p>
-                      <button
-                        type="button"
-                        className="btn-password-toggle"
-                        onClick={() => setShowPassword(!showPassword)}
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          {showPassword ? (
-                            <>
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                              <circle cx="12" cy="12" r="3"></circle>
-                            </>
-                          ) : (
-                            <>
-                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                              <line x1="1" y1="1" x2="23" y2="23"></line>
-                            </>
-                          )}
-                        </svg>
-                      </button>
-                    </div>
                   </div>
                 </div>
                 <div className="view-row">
@@ -1235,6 +1374,28 @@ const Students = () => {
                           cursor: "pointer",
                           fontSize: "0.85rem",
                           fontWeight: "600",
+                          transition:
+                            "transform 0.2s ease, box-shadow 0.2s ease",
+                          boxShadow: "0 2px 6px rgba(0, 123, 255, 0.2)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
+                          e.currentTarget.style.boxShadow =
+                            "0 6px 14px rgba(0, 123, 255, 0.25)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(0) scale(1)";
+                          e.currentTarget.style.boxShadow =
+                            "0 2px 6px rgba(0, 123, 255, 0.2)";
+                        }}
+                        onMouseDown={(e) => {
+                          e.currentTarget.style.transform = "scale(0.97)";
+                        }}
+                        onMouseUp={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
                         }}
                       >
                         Copy
@@ -1251,9 +1412,69 @@ const Students = () => {
                           cursor: "pointer",
                           fontSize: "0.85rem",
                           fontWeight: "600",
+                          transition:
+                            "transform 0.2s ease, box-shadow 0.2s ease",
+                          boxShadow: "0 2px 6px rgba(16, 185, 129, 0.2)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
+                          e.currentTarget.style.boxShadow =
+                            "0 6px 14px rgba(16, 185, 129, 0.25)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(0) scale(1)";
+                          e.currentTarget.style.boxShadow =
+                            "0 2px 6px rgba(16, 185, 129, 0.2)";
+                        }}
+                        onMouseDown={(e) => {
+                          e.currentTarget.style.transform = "scale(0.97)";
+                        }}
+                        onMouseUp={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
                         }}
                       >
                         🔄 Generate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSendTempPassword}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          backgroundColor: "#2563eb",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "600",
+                          transition:
+                            "transform 0.2s ease, box-shadow 0.2s ease",
+                          boxShadow: "0 2px 6px rgba(37, 99, 235, 0.2)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
+                          e.currentTarget.style.boxShadow =
+                            "0 6px 14px rgba(37, 99, 235, 0.25)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(0) scale(1)";
+                          e.currentTarget.style.boxShadow =
+                            "0 2px 6px rgba(37, 99, 235, 0.2)";
+                        }}
+                        onMouseDown={(e) => {
+                          e.currentTarget.style.transform = "scale(0.97)";
+                        }}
+                        onMouseUp={(e) => {
+                          e.currentTarget.style.transform =
+                            "translateY(-1px) scale(1.02)";
+                        }}
+                      >
+                        Send
                       </button>
                     </div>
                   </div>

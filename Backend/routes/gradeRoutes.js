@@ -23,10 +23,11 @@ router.put("/bulk-update", async (req, res) => {
 
     const updatedGrades = await Promise.all(
       grades.map((gradeItem, index) => {
-        if (!gradeItem?.id) {
-          throw new Error(`Missing grade id at index ${index}.`);
+        if (gradeItem?.id) {
+          return gradeService.updateGrade(gradeItem.id, gradeItem);
         }
-        return gradeService.updateGrade(gradeItem.id, gradeItem);
+
+        return gradeService.createGrade(gradeItem);
       }),
     );
 
@@ -41,9 +42,9 @@ router.put("/bulk-update", async (req, res) => {
 router.get("/student/:studentId", async (req, res) => {
   try {
     const { studentId } = req.params;
-    
+
     // Safety check for ID
-    if (!studentId || studentId === 'undefined') {
+    if (!studentId || studentId === "undefined") {
       return res.status(400).json({ error: "Invalid Student ID" });
     }
 

@@ -1,32 +1,110 @@
-import React, { useState } from 'react';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import '../../css/profilesettings.css';
+import React, { useEffect, useState } from "react";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import "../../css/profilesettings.css";
+import { authService } from "../services/apiClient";
 
 const ProfileSettings = () => {
+  const storedUser =
+    typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("user") || "null")
+      : null;
+
+  const [profile, setProfile] = useState({
+    firstName: storedUser?.first_name || storedUser?.firstName || "",
+    lastName: storedUser?.last_name || storedUser?.lastName || "",
+    middleName: storedUser?.middle_name || storedUser?.middleName || "",
+    email: storedUser?.email || "",
+    phoneNumber: storedUser?.phone_number || storedUser?.phoneNumber || "",
+    employeeId: storedUser?.employee_id || storedUser?.employeeId || "",
+    gradeLevelAssignment: storedUser?.grade_level_assignment || "",
+    classAssignment: storedUser?.class_assignment || "",
+    department: storedUser?.department || "",
+  });
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [schedule, setSchedule] = useState([
-    { code: 'MATH101', subject: 'Mathematics', section: 'Class A', time: 'Mon 8:00AM - 10:00AM' },
-    { code: 'ENG102', subject: 'English', section: 'Class B', time: 'Tue 10:30AM - 12:30PM' },
-    { code: 'SCI103', subject: 'Science', section: 'Class A', time: 'Wed 8:00AM - 10:00AM' },
+    {
+      code: "MATH101",
+      subject: "Mathematics",
+      section: "Class A",
+      time: "Mon 8:00AM - 10:00AM",
+    },
+    {
+      code: "ENG102",
+      subject: "English",
+      section: "Class B",
+      time: "Tue 10:30AM - 12:30PM",
+    },
+    {
+      code: "SCI103",
+      subject: "Science",
+      section: "Class A",
+      time: "Wed 8:00AM - 10:00AM",
+    },
   ]);
 
   const handleScheduleChange = (index, field, value) => {
     setSchedule((prev) =>
       prev.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: value } : row
-      )
+        rowIndex === index ? { ...row, [field]: value } : row,
+      ),
     );
   };
 
   const addScheduleRow = () => {
     setSchedule((prev) => [
       ...prev,
-      { code: '', subject: '', section: '', time: '' },
+      { code: "", subject: "", section: "", time: "" },
     ]);
   };
 
   const removeScheduleRow = (index) => {
     setSchedule((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setIsLoadingProfile(true);
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          const fallbackUser = JSON.parse(
+            localStorage.getItem("user") || "null",
+          );
+          const mergedUser = {
+            ...(fallbackUser || {}),
+            ...(currentUser || {}),
+          };
+
+          setProfile({
+            firstName: mergedUser.firstName || mergedUser.first_name || "",
+            lastName: mergedUser.lastName || mergedUser.last_name || "",
+            middleName: mergedUser.middleName || mergedUser.middle_name || "",
+            email: mergedUser.email || "",
+            phoneNumber:
+              mergedUser.phoneNumber || mergedUser.phone_number || "",
+            employeeId: mergedUser.employeeId || mergedUser.employee_id || "",
+            gradeLevelAssignment:
+              mergedUser.gradeLevelAssignment ||
+              mergedUser.grade_level_assignment ||
+              "",
+            classAssignment:
+              mergedUser.classAssignment || mergedUser.class_assignment || "",
+            department: mergedUser.department || "",
+          });
+        }
+      } catch (error) {
+        toast.error("Unable to load profile details.");
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleProfileChange = (field, value) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -47,36 +125,72 @@ const ProfileSettings = () => {
               <button className="btn-secondary">Change Photo</button>
             </div>
           </div>
-          
+
           <form className="settings-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>First Name *</label>
-                <input type="text" defaultValue="Maria" />
-              </div>
-              <div className="form-group">
-                <label>Last Name *</label>
-                <input type="text" defaultValue="Santos" />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Middle Name</label>
-              <input type="text" defaultValue="Reyes" />
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Email Address *</label>
-                <input type="email" defaultValue="maria.santos@summitridge.edu" />
-              </div>
-              <div className="form-group">
-                <label>Phone Number</label>
-                <input type="tel" defaultValue="+63 912 345 6789" />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Employee ID</label>
-              <input type="text" defaultValue="EMP-2023-001" disabled />
-            </div>
+            {isLoadingProfile ? (
+              <p>Loading profile...</p>
+            ) : (
+              <>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>First Name *</label>
+                    <input
+                      type="text"
+                      value={profile.firstName}
+                      onChange={(e) =>
+                        handleProfileChange("firstName", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Last Name *</label>
+                    <input
+                      type="text"
+                      value={profile.lastName}
+                      onChange={(e) =>
+                        handleProfileChange("lastName", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Middle Name</label>
+                  <input
+                    type="text"
+                    value={profile.middleName}
+                    onChange={(e) =>
+                      handleProfileChange("middleName", e.target.value)
+                    }
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Email Address *</label>
+                    <input
+                      type="email"
+                      value={profile.email}
+                      onChange={(e) =>
+                        handleProfileChange("email", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input
+                      type="tel"
+                      value={profile.phoneNumber}
+                      onChange={(e) =>
+                        handleProfileChange("phoneNumber", e.target.value)
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Employee ID</label>
+                  <input type="text" value={profile.employeeId} disabled />
+                </div>
+              </>
+            )}
           </form>
         </div>
 
@@ -87,26 +201,45 @@ const ProfileSettings = () => {
             <div className="form-row">
               <div className="form-group">
                 <label>Grade Level Assignment *</label>
-                <select defaultValue="Grade 3">
-                  <option>Grade 1</option>
-                  <option>Grade 2</option>
-                  <option selected>Grade 3</option>
-                  <option>Grade 4</option>
-                  <option>Grade 5</option>
-                  <option>Grade 6</option>
+                <select
+                  value={profile.gradeLevelAssignment}
+                  onChange={(e) =>
+                    handleProfileChange("gradeLevelAssignment", e.target.value)
+                  }
+                >
+                  <option value="">Select grade</option>
+                  <option value="Grade 1">Grade 1</option>
+                  <option value="Grade 2">Grade 2</option>
+                  <option value="Grade 3">Grade 3</option>
+                  <option value="Grade 4">Grade 4</option>
+                  <option value="Grade 5">Grade 5</option>
+                  <option value="Grade 6">Grade 6</option>
                 </select>
               </div>
               <div className="form-group">
                 <label>Class Assignment *</label>
-                <select defaultValue="Class A">
-                  <option selected>Class A</option>
-                  <option>Class B</option>
+                <select
+                  value={profile.classAssignment}
+                  onChange={(e) =>
+                    handleProfileChange("classAssignment", e.target.value)
+                  }
+                >
+                  <option value="">Select class</option>
+                  <option value="Class A">Class A</option>
+                  <option value="Class B">Class B</option>
                 </select>
               </div>
             </div>
             <div className="form-group">
               <label>Department</label>
-              <input type="text" defaultValue="Elementary Department" disabled />
+              <input
+                type="text"
+                value={profile.department}
+                onChange={(e) =>
+                  handleProfileChange("department", e.target.value)
+                }
+                disabled
+              />
             </div>
             <div className="form-group">
               <label>Subjects Taught</label>
@@ -137,7 +270,13 @@ const ProfileSettings = () => {
                           <input
                             type="text"
                             value={row.code}
-                            onChange={(e) => handleScheduleChange(index, 'code', e.target.value)}
+                            onChange={(e) =>
+                              handleScheduleChange(
+                                index,
+                                "code",
+                                e.target.value,
+                              )
+                            }
                             placeholder="e.g. MATH101"
                           />
                         </td>
@@ -145,7 +284,13 @@ const ProfileSettings = () => {
                           <input
                             type="text"
                             value={row.subject}
-                            onChange={(e) => handleScheduleChange(index, 'subject', e.target.value)}
+                            onChange={(e) =>
+                              handleScheduleChange(
+                                index,
+                                "subject",
+                                e.target.value,
+                              )
+                            }
                             placeholder="e.g. Mathematics"
                           />
                         </td>
@@ -153,7 +298,13 @@ const ProfileSettings = () => {
                           <input
                             type="text"
                             value={row.section}
-                            onChange={(e) => handleScheduleChange(index, 'section', e.target.value)}
+                            onChange={(e) =>
+                              handleScheduleChange(
+                                index,
+                                "section",
+                                e.target.value,
+                              )
+                            }
                             placeholder="e.g. Class A"
                           />
                         </td>
@@ -161,7 +312,13 @@ const ProfileSettings = () => {
                           <input
                             type="text"
                             value={row.time}
-                            onChange={(e) => handleScheduleChange(index, 'time', e.target.value)}
+                            onChange={(e) =>
+                              handleScheduleChange(
+                                index,
+                                "time",
+                                e.target.value,
+                              )
+                            }
                             placeholder="e.g. Mon 8:00AM - 10:00AM"
                           />
                         </td>
@@ -179,7 +336,11 @@ const ProfileSettings = () => {
                   </tbody>
                 </table>
               </div>
-              <button type="button" className="btn-secondary schedule-add-btn" onClick={addScheduleRow}>
+              <button
+                type="button"
+                className="btn-secondary schedule-add-btn"
+                onClick={addScheduleRow}
+              >
                 + Add Row
               </button>
             </div>
@@ -204,7 +365,9 @@ const ProfileSettings = () => {
                 <input type="password" placeholder="Confirm new password" />
               </div>
             </div>
-            <button type="button" className="btn-secondary">Update Password</button>
+            <button type="button" className="btn-secondary">
+              Update Password
+            </button>
           </form>
         </div>
 

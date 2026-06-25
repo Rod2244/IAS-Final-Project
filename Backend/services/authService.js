@@ -13,9 +13,9 @@ const authService = {
   // Sign up a new user
   async signUp(email, password, role = "student", profileData = {}) {
     try {
-      const isTeacher = role === "faculty" || role === "teacher";
+      const isFacultyLike = ["faculty", "teacher", "admin"].includes(role);
       const allowedRoles = ["student", "admin"];
-      const normalizedRole = isTeacher
+      const normalizedRole = isFacultyLike
         ? "admin"
         : allowedRoles.includes(role)
           ? role
@@ -50,8 +50,8 @@ const authService = {
 
       if (userError) throw userError;
 
-      // If role is faculty/teacher, also create in teachers table
-      if (isTeacher) {
+      // If role is faculty/teacher/admin, also create in teachers table
+      if (isFacultyLike) {
         const { error: teacherError } = await supabaseAdmin
           .from("teachers")
           .insert({
@@ -155,12 +155,64 @@ const authService = {
         newValues: { ipAddress, userAgent },
       });
 
+      let userProfile = {
+        id: data.user.id,
+        email: data.user.email,
+        role: userData.role,
+      };
+
+      if (
+        userData.role === "admin" ||
+        userData.role === "teacher" ||
+        userData.role === "faculty"
+      ) {
+        const { data: teacherProfile, error: teacherProfileError } =
+          await supabaseAdmin
+            .from("teachers")
+            .select(
+              "first_name,last_name,middle_name,employee_id,phone_number,department,grade_level_assignment,class_assignment",
+            )
+            .eq("user_id", data.user.id)
+            .maybeSingle();
+
+        if (!teacherProfileError && teacherProfile) {
+          userProfile = {
+            ...userProfile,
+            ...teacherProfile,
+            first_name:
+              teacherProfile.first_name || userProfile.first_name || null,
+            last_name:
+              teacherProfile.last_name || userProfile.last_name || null,
+            firstName:
+              teacherProfile.first_name || userProfile.firstName || null,
+            lastName: teacherProfile.last_name || userProfile.lastName || null,
+            middleName:
+              teacherProfile.middle_name || userProfile.middleName || null,
+            employeeId:
+              teacherProfile.employee_id || userProfile.employeeId || null,
+            phoneNumber:
+              teacherProfile.phone_number || userProfile.phoneNumber || null,
+            department:
+              teacherProfile.department || userProfile.department || null,
+            gradeLevelAssignment:
+              teacherProfile.grade_level_assignment ||
+              userProfile.gradeLevelAssignment ||
+              null,
+            classAssignment:
+              teacherProfile.class_assignment ||
+              userProfile.classAssignment ||
+              null,
+          };
+        }
+      }
+
       return {
         session: data.session,
         user: data.user,
         userRole: userData.role,
         sessionToken: sessionToken,
         mustChangePassword: userData.must_change_password || false,
+        userProfile,
       };
     } catch (error) {
       throw new Error("Invalid login credentials.");
@@ -228,8 +280,78 @@ const authService = {
   },
 
   // Get current user
-  async getCurrentUser() {
+  async getCurrentUser(sessionToken = null) {
     try {
+      if (sessionToken) {
+        const { data: sessionRow, error: sessionError } = await supabaseAdmin
+          .from("sessions")
+          .select("user_id, expires_at")
+          .eq("token", sessionToken)
+          .gt("expires_at", new Date().toISOString())
+          .maybeSingle();
+
+        if (sessionError) throw sessionError;
+        if (!sessionRow?.user_id) throw new Error("No active session found.");
+
+        const userId = sessionRow.user_id;
+        const { data: userRow, error: userError } = await supabaseAdmin
+          .from("users")
+          .select("id, email, role, status, must_change_password")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (userError) throw userError;
+        if (!userRow) throw new Error("User not found.");
+
+        let profile = {};
+        if (
+          userRow.role === "admin" ||
+          userRow.role === "teacher" ||
+          userRow.role === "faculty"
+        ) {
+          const { data: teacherRow, error: teacherError } = await supabaseAdmin
+            .from("teachers")
+            .select(
+              "first_name,last_name,middle_name,employee_id,phone_number,department,grade_level_assignment,class_assignment",
+            )
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (teacherError) throw teacherError;
+          profile = teacherRow || {};
+        } else if (userRow.role === "student") {
+          const { data: studentRow, error: studentError } = await supabaseAdmin
+            .from("students")
+            .select("name, grade, section, school_year")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (studentError) throw studentError;
+          profile = studentRow || {};
+        }
+
+        return {
+          id: userRow.id,
+          email: userRow.email,
+          role: userRow.role,
+          status: userRow.status,
+          must_change_password: userRow.must_change_password,
+          ...profile,
+          firstName: profile.first_name || profile.firstName || null,
+          lastName: profile.last_name || profile.lastName || null,
+          middleName: profile.middle_name || profile.middleName || null,
+          employeeId: profile.employee_id || profile.employeeId || null,
+          phoneNumber: profile.phone_number || profile.phoneNumber || null,
+          gradeLevelAssignment:
+            profile.grade_level_assignment ||
+            profile.gradeLevelAssignment ||
+            null,
+          classAssignment:
+            profile.class_assignment || profile.classAssignment || null,
+          department: profile.department || null,
+        };
+      }
+
       const { data, error } = await supabase.auth.getUser();
       if (error) throw error;
       return data.user;

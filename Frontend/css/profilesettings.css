@@ -126,7 +126,7 @@
   color: #334155;
 }
 
-..form-group input,
+.form-group input,
 .form-group select,
 .form-group textarea {
   padding: 12px 14px;
@@ -316,7 +316,7 @@ input:checked + .slider:before {
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .profile-header {
     flex-direction: column;
     text-align: center;
@@ -327,21 +327,21 @@ input:checked + .slider:before {
   .page-header h1 {
     font-size: 24px;
   }
-  
+
   .settings-section {
     padding: 20px;
   }
-  
+
   .notification-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 15px;
   }
-  
+
   .settings-actions {
     flex-direction: column;
   }
-  
+
   .settings-actions .btn-primary,
   .settings-actions .btn-secondary {
     width: 100%;

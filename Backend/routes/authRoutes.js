@@ -340,6 +340,7 @@ router.post("/signin", async (req, res) => {
         userRole: userRow.role,
         mustChangePassword: result.mustChangePassword || false,
         user: result.user,
+        userProfile: result.userProfile,
       });
     }
 
@@ -367,6 +368,7 @@ router.post("/signin", async (req, res) => {
       userRole: result.userRole,
       sessionToken: result.sessionToken,
       mustChangePassword: result.mustChangePassword || false,
+      userProfile: result.userProfile,
     });
   } catch (error) {
     const lockResult = await securityService.recordFailedAttempt(
@@ -413,7 +415,14 @@ router.post("/signout", async (req, res) => {
 // Get current user
 router.get("/me", async (req, res) => {
   try {
-    const user = await authService.getCurrentUser();
+    const sessionToken =
+      req.cookies?.sessionToken ||
+      req.headers?.["x-session-token"] ||
+      req.headers?.authorization?.split(" ")[1] ||
+      req.body?.sessionToken ||
+      req.query?.sessionToken;
+
+    const user = await authService.getCurrentUser(sessionToken);
     res.status(200).json({ success: true, user });
   } catch (error) {
     res.status(400).json({ error: error.message });

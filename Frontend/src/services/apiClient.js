@@ -18,14 +18,37 @@ const sanitize = (str) => {
   return str.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "").trim();
 };
 
+const mergeUserProfile = (userData = {}, profileData = {}) => {
+  const merged = {
+    ...userData,
+    ...profileData,
+  };
+
+  return {
+    ...merged,
+    firstName: merged.firstName || merged.first_name || "",
+    lastName: merged.lastName || merged.last_name || "",
+    middleName: merged.middleName || merged.middle_name || "",
+    employeeId: merged.employeeId || merged.employee_id || "",
+    phoneNumber: merged.phoneNumber || merged.phone_number || "",
+    gradeLevelAssignment:
+      merged.gradeLevelAssignment || merged.grade_level_assignment || "",
+    classAssignment: merged.classAssignment || merged.class_assignment || "",
+    department: merged.department || "",
+  };
+};
+
 // Fetch CSRF token on first app load if not already cached
 let csrfTokenPromise = null;
 
 const fetchCsrfToken = async () => {
   try {
-    const response = await axios.get("http://localhost:5000/api/auth/csrf-token", {
-      withCredentials: true,
-    });
+    const response = await axios.get(
+      "http://localhost:5000/api/auth/csrf-token",
+      {
+        withCredentials: true,
+      },
+    );
     return response.data.csrfToken;
   } catch (error) {
     console.warn("Failed to fetch CSRF token", error);
@@ -91,6 +114,15 @@ export const authService = {
         if (response.data.session?.access_token) {
           localStorage.setItem("authToken", response.data.session.access_token);
         }
+
+        const profilePayload = mergeUserProfile(response.data.user || {}, {
+          firstName: sanitize(profileData.firstName) || "",
+          lastName: sanitize(profileData.lastName) || "",
+          middleName: sanitize(profileData.middleInitial) || "",
+          employeeId: sanitize(profileData.facultyId) || "",
+        });
+        localStorage.setItem("user", JSON.stringify(profilePayload));
+        localStorage.setItem("userRole", sanitize(role) || "student");
         return response.data;
       }
       throw new Error(response.data.error || "Sign up failed");
@@ -116,7 +148,11 @@ export const authService = {
           localStorage.setItem("sessionToken", response.data.sessionToken);
         }
         // Store user info
-        localStorage.setItem("user", JSON.stringify(response.data.user));
+        const profilePayload = mergeUserProfile(
+          response.data.user || {},
+          response.data.userProfile || {},
+        );
+        localStorage.setItem("user", JSON.stringify(profilePayload));
         localStorage.setItem("userRole", response.data.userRole);
         return response.data;
       }
@@ -233,6 +269,23 @@ export const authService = {
   },
 
   async getCurrentUser() {
+    try {
+      const sessionToken = localStorage.getItem("sessionToken");
+      const response = await apiClient.get("/auth/me", {
+        headers: sessionToken ? { "X-Session-Token": sessionToken } : undefined,
+      });
+      if (response.data?.user) {
+        const user = mergeUserProfile(
+          response.data.user || {},
+          response.data.user?.profile || response.data.userProfile || {},
+        );
+        localStorage.setItem("user", JSON.stringify(user));
+        return user;
+      }
+    } catch (error) {
+      console.warn("Falling back to local cached user:", error.message);
+    }
+
     try {
       const user = localStorage.getItem("user");
       return user ? JSON.parse(user) : null;

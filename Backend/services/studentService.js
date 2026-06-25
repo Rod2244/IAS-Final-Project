@@ -1,6 +1,50 @@
 const bcrypt = require("bcryptjs");
+const https = require("https");
 const { supabaseAdmin } = require("../config/supabase");
 const auditService = require("./auditService");
+
+const sendEmailViaBrevo = (toEmail, subject, htmlContent) => {
+  return new Promise((resolve, reject) => {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) return reject(new Error("Brevo API key not configured"));
+
+    const payload = JSON.stringify({
+      sender: {
+        name: process.env.MAIL_FROM_NAME || "NoReply",
+        email: process.env.MAIL_FROM_EMAIL || "noreply@example.com",
+      },
+      to: [{ email: toEmail }],
+      subject,
+      htmlContent,
+    });
+
+    const options = {
+      hostname: "api.brevo.com",
+      path: "/v3/smtp/email",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+        "api-key": apiKey,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) return resolve(data);
+        return reject(
+          new Error(`Brevo send failed: ${res.statusCode} ${data}`),
+        );
+      });
+    });
+
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+};
 
 // Student Service
 const studentService = {
@@ -18,13 +62,20 @@ const studentService = {
   // Get student by ID
   async getStudentById(studentId) {
     try {
-      const { data, error } = await supabaseAdmin
+      const { data: student, error } = await supabaseAdmin
         .from("students")
         .select("*")
         .eq("id", studentId)
         .single();
       if (error) throw error;
-      return data;
+
+      const passwordValue =
+        student?.temporary_password || student?.password || "";
+
+      return {
+        ...student,
+        password: passwordValue,
+      };
     } catch (error) {
       throw new Error(`Get student error: ${error.message}`);
     }
@@ -117,11 +168,30 @@ const studentService = {
   },
 
   // Create student with auth account (admin creates account with temporary password)
+  async sendTemporaryPasswordEmail({ email, name, tempPassword }) {
+    try {
+      if (!email || !tempPassword) {
+        throw new Error("Email and temporary password are required");
+      }
+
+      await sendEmailViaBrevo(
+        email,
+        "Your temporary student portal password",
+        `<p>Hello ${name || "student"},</p>
+         <p>Your temporary student portal password is <strong>${tempPassword}</strong>.</p>
+         <p>You will be required to change it on your first login.</p>`,
+      );
+
+      return { sent: true };
+    } catch (error) {
+      throw new Error(`Send temporary password email error: ${error.message}`);
+    }
+  },
+
   async createStudentWithAccount(studentData) {
     try {
       const {
         email,
-        password,
         name,
         lrn,
         grade,
@@ -134,17 +204,26 @@ const studentService = {
         ...otherData
       } = studentData;
 
-      console.log("createStudentWithAccount called with:", { email, password, passwordLength: password?.length, name });
-
-      if (!email || !password) {
-        throw new Error("Email and password are required");
+      if (!email) {
+        throw new Error("Email is required");
       }
+
+      const tempPassword = require("crypto")
+        .randomBytes(8)
+        .toString("base64")
+        .substring(0, 12);
+
+      console.log("createStudentWithAccount called with:", {
+        email,
+        passwordLength: tempPassword.length,
+        name,
+      });
 
       // Create Supabase auth user
       const { data: authData, error: authError } =
         await supabaseAdmin.auth.admin.createUser({
           email,
-          password,
+          password: tempPassword,
           email_confirm: true,
         });
 
@@ -153,10 +232,13 @@ const studentService = {
         throw authError;
       }
 
-      console.log("Supabase auth user created successfully:", { userId: authData.user.id, email });
+      console.log("Supabase auth user created successfully:", {
+        userId: authData.user.id,
+        email,
+      });
 
       const userId = authData.user.id;
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
 
       // Create user record with must_change_password flag set to true
       const { data: userData, error: userError } = await supabaseAdmin
@@ -195,6 +277,22 @@ const studentService = {
 
       if (studentError) throw studentError;
 
+      try {
+        await sendEmailViaBrevo(
+          email,
+          "Your temporary student portal password",
+          `<p>Hello ${name || "student"},</p>
+           <p>Your temporary student portal password is <strong>${tempPassword}</strong>.</p>
+           <p>You will be required to change it on your first login.</p>`,
+        );
+        console.log("Temporary password email sent to:", email);
+      } catch (emailErr) {
+        console.warn(
+          "Temporary password email send failed:",
+          emailErr.message || emailErr,
+        );
+      }
+
       // Audit log
       await auditService.recordEvent({
         userId: null,
@@ -207,7 +305,7 @@ const studentService = {
       return {
         success: true,
         student: studentRecord[0],
-        temporaryPassword: password, // Return temp password to display to admin
+        temporaryPassword: tempPassword, // Return temp password to display to admin
       };
     } catch (error) {
       throw new Error(`Create student with account error: ${error.message}`);
