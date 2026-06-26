@@ -16,6 +16,7 @@ CREATE TABLE users (
     status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Inactive', 'Suspended')),
     otp_enabled BOOLEAN DEFAULT FALSE,
     otp_secret VARCHAR(255),
+    must_change_password BOOLEAN DEFAULT FALSE,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -30,11 +31,11 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE TABLE teachers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
     middle_name VARCHAR(100),
     phone_number VARCHAR(20),
-    employee_id VARCHAR(50) NOT NULL UNIQUE,
+    employee_id VARCHAR(50),
     department VARCHAR(100),
     grade_level_assignment VARCHAR(50),
     class_assignment VARCHAR(50),
@@ -293,7 +294,23 @@ CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 CREATE INDEX idx_audit_log_created_at ON audit_log(created_at);
 
 -- ============================================================================
--- 15. SESSIONS TABLE (For managing user sessions)
+-- 15. NOTIFICATION_PREFERENCES TABLE (For user notification settings)
+-- ============================================================================
+CREATE TABLE notification_preferences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    email_notifications BOOLEAN DEFAULT TRUE,
+    grade_reminders BOOLEAN DEFAULT TRUE,
+    attendance_alerts BOOLEAN DEFAULT TRUE,
+    system_updates BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notification_preferences_user_id ON notification_preferences(user_id);
+
+-- ============================================================================
+-- 16. SESSIONS TABLE (For managing user sessions)
 -- ============================================================================
 CREATE TABLE sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -661,10 +661,60 @@ export const subjectService = {
   },
 };
 
+// ============================================================================
+// USER SERVICES
+// ============================================================================
+
+export const userService = {
+  async getProfile() {
+    try {
+      const response = await apiClient.get("/users/profile");
+      return response.data.user;
+    } catch (error) {
+      console.error("Get profile error:", error);
+      throw error;
+    }
+  },
+
+  async updateProfile(profileData) {
+    try {
+      const response = await apiClient.put("/users/profile", profileData);
+      return response.data;
+    } catch (error) {
+      console.error("Update profile error:", error);
+      throw error;
+    }
+  },
+
+  async updatePassword(currentPassword, newPassword) {
+    try {
+      const response = await apiClient.put("/users/password", {
+        currentPassword,
+        newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Update password error:", error);
+      throw error;
+    }
+  },
+
+  async updateNotifications(preferences) {
+    try {
+      const response = await apiClient.put("/users/notifications", preferences);
+      return response.data;
+    } catch (error) {
+      console.error("Update notifications error:", error);
+      throw error;
+    }
+  },
+};
+
 export default {
   authService,
   studentService,
   gradeService,
   attendanceService,
   subjectService,
+  userService,
 };

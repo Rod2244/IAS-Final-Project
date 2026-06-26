@@ -204,6 +204,7 @@ const authService = {
               null,
           };
         }
+        // If no teacher record exists, userProfile still contains basic user info
       }
 
       return {
@@ -317,8 +318,10 @@ const authService = {
             .eq("user_id", userId)
             .maybeSingle();
 
-          if (teacherError) throw teacherError;
-          profile = teacherRow || {};
+          if (!teacherError && teacherRow) {
+            profile = teacherRow;
+          }
+          // If no teacher record exists, profile remains empty but we still return basic user info
         } else if (userRow.role === "student") {
           const { data: studentRow, error: studentError } = await supabaseAdmin
             .from("students")
@@ -326,8 +329,10 @@ const authService = {
             .eq("user_id", userId)
             .maybeSingle();
 
-          if (studentError) throw studentError;
-          profile = studentRow || {};
+          if (!studentError && studentRow) {
+            profile = studentRow;
+          }
+          // If no student record exists, profile remains empty but we still return basic user info
         }
 
         return {

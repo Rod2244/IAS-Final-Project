@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../../css/profilesettings.css";
-import { authService } from "../services/apiClient";
+import { authService, userService } from "../services/apiClient";
 
 const ProfileSettings = () => {
   const storedUser =
@@ -20,6 +20,12 @@ const ProfileSettings = () => {
     gradeLevelAssignment: storedUser?.grade_level_assignment || "",
     classAssignment: storedUser?.class_assignment || "",
     department: storedUser?.department || "",
+  });
+  const [notifications, setNotifications] = useState({
+    emailNotifications: true,
+    gradeReminders: true,
+    attendanceAlerts: true,
+    systemUpdates: false,
   });
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [schedule, setSchedule] = useState([
@@ -62,49 +68,118 @@ const ProfileSettings = () => {
     setSchedule((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
   };
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        setIsLoadingProfile(true);
-        const currentUser = await authService.getCurrentUser();
-        if (currentUser) {
-          const fallbackUser = JSON.parse(
-            localStorage.getItem("user") || "null",
-          );
-          const mergedUser = {
-            ...(fallbackUser || {}),
-            ...(currentUser || {}),
-          };
+  const loadProfile = async () => {
+    try {
+      setIsLoadingProfile(true);
+      const currentUser = await userService.getProfile();
+      if (currentUser) {
+        const fallbackUser = JSON.parse(
+          localStorage.getItem("user") || "null",
+        );
+        const mergedUser = {
+          ...(fallbackUser || {}),
+          ...(currentUser || {}),
+        };
 
-          setProfile({
-            firstName: mergedUser.firstName || mergedUser.first_name || "",
-            lastName: mergedUser.lastName || mergedUser.last_name || "",
-            middleName: mergedUser.middleName || mergedUser.middle_name || "",
-            email: mergedUser.email || "",
-            phoneNumber:
-              mergedUser.phoneNumber || mergedUser.phone_number || "",
-            employeeId: mergedUser.employeeId || mergedUser.employee_id || "",
-            gradeLevelAssignment:
-              mergedUser.gradeLevelAssignment ||
-              mergedUser.grade_level_assignment ||
-              "",
-            classAssignment:
-              mergedUser.classAssignment || mergedUser.class_assignment || "",
-            department: mergedUser.department || "",
+        setProfile({
+          firstName: mergedUser.firstName || mergedUser.first_name || "",
+          lastName: mergedUser.lastName || mergedUser.last_name || "",
+          middleName: mergedUser.middleName || mergedUser.middle_name || "",
+          email: mergedUser.email || "",
+          phoneNumber:
+            mergedUser.phoneNumber || mergedUser.phone_number || "",
+          employeeId: mergedUser.employeeId || mergedUser.employee_id || "",
+          gradeLevelAssignment:
+            mergedUser.gradeLevelAssignment ||
+            mergedUser.grade_level_assignment ||
+            "",
+          classAssignment:
+            mergedUser.classAssignment || mergedUser.class_assignment || "",
+          department: mergedUser.department || "",
+        });
+
+        // Load notification preferences
+        if (mergedUser.notificationPreferences) {
+          setNotifications({
+            emailNotifications: mergedUser.notificationPreferences.email_notifications ?? true,
+            gradeReminders: mergedUser.notificationPreferences.grade_reminders ?? true,
+            attendanceAlerts: mergedUser.notificationPreferences.attendance_alerts ?? true,
+            systemUpdates: mergedUser.notificationPreferences.system_updates ?? false,
           });
         }
-      } catch (error) {
-        toast.error("Unable to load profile details.");
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    };
 
+        // Load schedule if available
+        if (mergedUser.schedule && Array.isArray(mergedUser.schedule)) {
+          setSchedule(mergedUser.schedule);
+        }
+      }
+    } catch (error) {
+      toast.error("Unable to load profile details.");
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  useEffect(() => {
     loadProfile();
   }, []);
 
   const handleProfileChange = (field, value) => {
     setProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await userService.updateProfile({ ...profile, schedule });
+      toast.success("Profile updated successfully!");
+      // Update local storage
+      localStorage.setItem("user", JSON.stringify(profile));
+    } catch (error) {
+      toast.error("Failed to update profile.");
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    const currentPassword = document.querySelector('input[placeholder="Enter current password"]').value;
+    const newPassword = document.querySelector('input[placeholder="Enter new password"]').value;
+    const confirmPassword = document.querySelector('input[placeholder="Confirm new password"]').value;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all password fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+
+    try {
+      await userService.updatePassword(currentPassword, newPassword);
+      toast.success("Password updated successfully!");
+      // Clear password fields
+      document.querySelectorAll('input[type="password"]').forEach(input => input.value = "");
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Failed to update password.");
+    }
+  };
+
+  const handleCancel = async () => {
+    await loadProfile();
+    toast.info("Changes discarded.");
+  };
+
+  const handleNotificationChange = (key) => {
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSaveNotifications = async () => {
+    try {
+      await userService.updateNotifications(notifications);
+      toast.success("Notification preferences updated successfully!");
+    } catch (error) {
+      toast.error("Failed to update notification preferences.");
+    }
   };
 
   return (
@@ -365,7 +440,7 @@ const ProfileSettings = () => {
                 <input type="password" placeholder="Confirm new password" />
               </div>
             </div>
-            <button type="button" className="btn-secondary">
+            <button type="button" className="btn-secondary" onClick={handleUpdatePassword}>
               Update Password
             </button>
           </form>
@@ -381,7 +456,7 @@ const ProfileSettings = () => {
                 <p>Receive email updates about student activities and grades</p>
               </div>
               <label className="toggle-switch">
-                <input type="checkbox" defaultChecked />
+                <input type="checkbox" checked={notifications.emailNotifications} onChange={() => handleNotificationChange('emailNotifications')} />
                 <span className="slider"></span>
               </label>
             </div>
@@ -391,7 +466,7 @@ const ProfileSettings = () => {
                 <p>Get reminded about upcoming grade submission deadlines</p>
               </div>
               <label className="toggle-switch">
-                <input type="checkbox" defaultChecked />
+                <input type="checkbox" checked={notifications.gradeReminders} onChange={() => handleNotificationChange('gradeReminders')} />
                 <span className="slider"></span>
               </label>
             </div>
@@ -401,7 +476,7 @@ const ProfileSettings = () => {
                 <p>Receive alerts when students are marked absent</p>
               </div>
               <label className="toggle-switch">
-                <input type="checkbox" defaultChecked />
+                <input type="checkbox" checked={notifications.attendanceAlerts} onChange={() => handleNotificationChange('attendanceAlerts')} />
                 <span className="slider"></span>
               </label>
             </div>
@@ -411,17 +486,20 @@ const ProfileSettings = () => {
                 <p>Get notified about system maintenance and updates</p>
               </div>
               <label className="toggle-switch">
-                <input type="checkbox" />
+                <input type="checkbox" checked={notifications.systemUpdates} onChange={() => handleNotificationChange('systemUpdates')} />
                 <span className="slider"></span>
               </label>
             </div>
+          </div>
+          <div className="settings-actions">
+            <button className="btn-primary" onClick={handleSaveNotifications}>Save Notifications</button>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="settings-actions">
-          <button className="btn-primary">Save Changes</button>
-          <button className="btn-secondary">Cancel</button>
+          <button className="btn-primary" onClick={handleSaveProfile}>Save Changes</button>
+          <button className="btn-secondary" onClick={handleCancel}>Cancel</button>
         </div>
       </div>
     </div>
