@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../../css/profilesettings.css";
-import { authService, userService } from "../services/apiClient";
+import { userService } from "../services/apiClient";
 
 const ProfileSettings = () => {
   const storedUser =
@@ -26,6 +26,11 @@ const ProfileSettings = () => {
     gradeReminders: true,
     attendanceAlerts: true,
     systemUpdates: false,
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [schedule, setSchedule] = useState([
@@ -71,11 +76,42 @@ const ProfileSettings = () => {
   const loadProfile = async () => {
     try {
       setIsLoadingProfile(true);
+      const fallbackUser = JSON.parse(localStorage.getItem("user") || "null");
+
+      if (fallbackUser) {
+        setProfile((prev) => ({
+          ...prev,
+          firstName:
+            fallbackUser.firstName || fallbackUser.first_name || prev.firstName,
+          lastName:
+            fallbackUser.lastName || fallbackUser.last_name || prev.lastName,
+          middleName:
+            fallbackUser.middleName ||
+            fallbackUser.middle_name ||
+            prev.middleName,
+          email: fallbackUser.email || prev.email,
+          phoneNumber:
+            fallbackUser.phoneNumber ||
+            fallbackUser.phone_number ||
+            prev.phoneNumber,
+          employeeId:
+            fallbackUser.employeeId ||
+            fallbackUser.employee_id ||
+            prev.employeeId,
+          gradeLevelAssignment:
+            fallbackUser.gradeLevelAssignment ||
+            fallbackUser.grade_level_assignment ||
+            prev.gradeLevelAssignment,
+          classAssignment:
+            fallbackUser.classAssignment ||
+            fallbackUser.class_assignment ||
+            prev.classAssignment,
+          department: fallbackUser.department || prev.department,
+        }));
+      }
+
       const currentUser = await userService.getProfile();
       if (currentUser) {
-        const fallbackUser = JSON.parse(
-          localStorage.getItem("user") || "null",
-        );
         const mergedUser = {
           ...(fallbackUser || {}),
           ...(currentUser || {}),
@@ -86,8 +122,7 @@ const ProfileSettings = () => {
           lastName: mergedUser.lastName || mergedUser.last_name || "",
           middleName: mergedUser.middleName || mergedUser.middle_name || "",
           email: mergedUser.email || "",
-          phoneNumber:
-            mergedUser.phoneNumber || mergedUser.phone_number || "",
+          phoneNumber: mergedUser.phoneNumber || mergedUser.phone_number || "",
           employeeId: mergedUser.employeeId || mergedUser.employee_id || "",
           gradeLevelAssignment:
             mergedUser.gradeLevelAssignment ||
@@ -101,10 +136,14 @@ const ProfileSettings = () => {
         // Load notification preferences
         if (mergedUser.notificationPreferences) {
           setNotifications({
-            emailNotifications: mergedUser.notificationPreferences.email_notifications ?? true,
-            gradeReminders: mergedUser.notificationPreferences.grade_reminders ?? true,
-            attendanceAlerts: mergedUser.notificationPreferences.attendance_alerts ?? true,
-            systemUpdates: mergedUser.notificationPreferences.system_updates ?? false,
+            emailNotifications:
+              mergedUser.notificationPreferences.email_notifications ?? true,
+            gradeReminders:
+              mergedUser.notificationPreferences.grade_reminders ?? true,
+            attendanceAlerts:
+              mergedUser.notificationPreferences.attendance_alerts ?? true,
+            systemUpdates:
+              mergedUser.notificationPreferences.system_updates ?? false,
           });
         }
 
@@ -139,10 +178,12 @@ const ProfileSettings = () => {
     }
   };
 
+  const handlePasswordFormChange = (field, value) => {
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleUpdatePassword = async () => {
-    const currentPassword = document.querySelector('input[placeholder="Enter current password"]').value;
-    const newPassword = document.querySelector('input[placeholder="Enter new password"]').value;
-    const confirmPassword = document.querySelector('input[placeholder="Confirm new password"]').value;
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("Please fill in all password fields.");
@@ -157,8 +198,11 @@ const ProfileSettings = () => {
     try {
       await userService.updatePassword(currentPassword, newPassword);
       toast.success("Password updated successfully!");
-      // Clear password fields
-      document.querySelectorAll('input[type="password"]').forEach(input => input.value = "");
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
     } catch (error) {
       toast.error(error.response?.data?.error || "Failed to update password.");
     }
@@ -269,237 +313,63 @@ const ProfileSettings = () => {
           </form>
         </div>
 
-        {/* Academic Information */}
-        <div className="settings-section">
-          <h2>Academic Information</h2>
-          <form className="settings-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>Grade Level Assignment *</label>
-                <select
-                  value={profile.gradeLevelAssignment}
-                  onChange={(e) =>
-                    handleProfileChange("gradeLevelAssignment", e.target.value)
-                  }
-                >
-                  <option value="">Select grade</option>
-                  <option value="Grade 1">Grade 1</option>
-                  <option value="Grade 2">Grade 2</option>
-                  <option value="Grade 3">Grade 3</option>
-                  <option value="Grade 4">Grade 4</option>
-                  <option value="Grade 5">Grade 5</option>
-                  <option value="Grade 6">Grade 6</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Class Assignment *</label>
-                <select
-                  value={profile.classAssignment}
-                  onChange={(e) =>
-                    handleProfileChange("classAssignment", e.target.value)
-                  }
-                >
-                  <option value="">Select class</option>
-                  <option value="Class A">Class A</option>
-                  <option value="Class B">Class B</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Department</label>
-              <input
-                type="text"
-                value={profile.department}
-                onChange={(e) =>
-                  handleProfileChange("department", e.target.value)
-                }
-                disabled
-              />
-            </div>
-            <div className="form-group">
-              <label>Subjects Taught</label>
-              <div className="subjects-taught">
-                <span className="subject-tag">Mathematics</span>
-                <span className="subject-tag">English</span>
-                <span className="subject-tag">Science</span>
-                <span className="subject-tag">Social Studies</span>
-              </div>
-            </div>
-            <div className="form-group schedule-group">
-              <label>Weekly Schedule</label>
-              <div className="schedule-table-wrapper">
-                <table className="schedule-table">
-                  <thead>
-                    <tr>
-                      <th>Subject Code</th>
-                      <th>Subject Name</th>
-                      <th>Section</th>
-                      <th>Time</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedule.map((row, index) => (
-                      <tr key={index}>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.code}
-                            onChange={(e) =>
-                              handleScheduleChange(
-                                index,
-                                "code",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="e.g. MATH101"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.subject}
-                            onChange={(e) =>
-                              handleScheduleChange(
-                                index,
-                                "subject",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="e.g. Mathematics"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.section}
-                            onChange={(e) =>
-                              handleScheduleChange(
-                                index,
-                                "section",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="e.g. Class A"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.time}
-                            onChange={(e) =>
-                              handleScheduleChange(
-                                index,
-                                "time",
-                                e.target.value,
-                              )
-                            }
-                            placeholder="e.g. Mon 8:00AM - 10:00AM"
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn-secondary schedule-remove-btn"
-                            onClick={() => removeScheduleRow(index)}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary schedule-add-btn"
-                onClick={addScheduleRow}
-              >
-                + Add Row
-              </button>
-            </div>
-          </form>
-        </div>
-
         {/* Security Settings */}
         <div className="settings-section">
           <h2>Security Settings</h2>
           <form className="settings-form">
             <div className="form-group">
               <label>Current Password</label>
-              <input type="password" placeholder="Enter current password" />
+              <input
+                type="password"
+                placeholder="Enter current password"
+                value={passwordForm.currentPassword}
+                onChange={(e) =>
+                  handlePasswordFormChange("currentPassword", e.target.value)
+                }
+              />
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label>New Password</label>
-                <input type="password" placeholder="Enter new password" />
+                <input
+                  type="password"
+                  placeholder="Enter new password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) =>
+                    handlePasswordFormChange("newPassword", e.target.value)
+                  }
+                />
               </div>
               <div className="form-group">
                 <label>Confirm New Password</label>
-                <input type="password" placeholder="Confirm new password" />
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) =>
+                    handlePasswordFormChange("confirmPassword", e.target.value)
+                  }
+                />
               </div>
             </div>
-            <button type="button" className="btn-secondary" onClick={handleUpdatePassword}>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleUpdatePassword}
+            >
               Update Password
             </button>
           </form>
         </div>
 
-        {/* Notification Settings */}
-        <div className="settings-section">
-          <h2>Notification Preferences</h2>
-          <div className="notification-settings">
-            <div className="notification-item">
-              <div className="notification-info">
-                <h3>Email Notifications</h3>
-                <p>Receive email updates about student activities and grades</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" checked={notifications.emailNotifications} onChange={() => handleNotificationChange('emailNotifications')} />
-                <span className="slider"></span>
-              </label>
-            </div>
-            <div className="notification-item">
-              <div className="notification-info">
-                <h3>Grade Submission Reminders</h3>
-                <p>Get reminded about upcoming grade submission deadlines</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" checked={notifications.gradeReminders} onChange={() => handleNotificationChange('gradeReminders')} />
-                <span className="slider"></span>
-              </label>
-            </div>
-            <div className="notification-item">
-              <div className="notification-info">
-                <h3>Student Attendance Alerts</h3>
-                <p>Receive alerts when students are marked absent</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" checked={notifications.attendanceAlerts} onChange={() => handleNotificationChange('attendanceAlerts')} />
-                <span className="slider"></span>
-              </label>
-            </div>
-            <div className="notification-item">
-              <div className="notification-info">
-                <h3>System Updates</h3>
-                <p>Get notified about system maintenance and updates</p>
-              </div>
-              <label className="toggle-switch">
-                <input type="checkbox" checked={notifications.systemUpdates} onChange={() => handleNotificationChange('systemUpdates')} />
-                <span className="slider"></span>
-              </label>
-            </div>
-          </div>
-          <div className="settings-actions">
-            <button className="btn-primary" onClick={handleSaveNotifications}>Save Notifications</button>
-          </div>
-        </div>
-
         {/* Action Buttons */}
         <div className="settings-actions">
-          <button className="btn-primary" onClick={handleSaveProfile}>Save Changes</button>
-          <button className="btn-secondary" onClick={handleCancel}>Cancel</button>
+          <button className="btn-primary" onClick={handleSaveProfile}>
+            Save Changes
+          </button>
+          <button className="btn-secondary" onClick={handleCancel}>
+            Cancel
+          </button>
         </div>
       </div>
     </div>

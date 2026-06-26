@@ -1,5 +1,5 @@
 const express = require("express");
-const { supabaseAdmin } = require("../config/supabase");
+const { supabaseAdmin, supabase } = require("../config/supabase");
 const bcrypt = require("bcryptjs");
 const auditService = require("../services/auditService");
 
@@ -50,7 +50,11 @@ router.put("/profile", async (req, res) => {
     if (userError) throw userError;
 
     // Update based on role
-    if (userRow.role === "admin" || userRow.role === "teacher" || userRow.role === "faculty") {
+    if (
+      userRow.role === "admin" ||
+      userRow.role === "teacher" ||
+      userRow.role === "faculty"
+    ) {
       // Check if teacher record exists
       const { data: teacherRow, error: teacherCheckError } = await supabaseAdmin
         .from("teachers")
@@ -99,15 +103,15 @@ router.put("/profile", async (req, res) => {
 
         // Insert new schedule items
         const scheduleItems = req.body.schedule
-          .filter(item => item.subject && item.section) // Only add valid items
-          .map(item => ({
+          .filter((item) => item.subject && item.section) // Only add valid items
+          .map((item) => ({
             teacher_id: teacherId,
             subject_code: item.code || null,
             subject_name: item.subject,
             class_section: item.section,
-            day_of_week: item.time?.split(' ')[0] || 'Mon', // Extract day from time string
-            start_time: item.time?.split(' - ')[1]?.split(' ')[1] || '08:00', // Extract start time
-            end_time: item.time?.split(' - ')[1]?.split(' - ')[1] || '10:00', // Extract end time
+            day_of_week: item.time?.split(" ")[0] || "Mon", // Extract day from time string
+            start_time: item.time?.split(" - ")[1]?.split(" ")[1] || "08:00", // Extract start time
+            end_time: item.time?.split(" - ")[1]?.split(" - ")[1] || "10:00", // Extract end time
             classroom_location: null,
           }));
 
@@ -116,7 +120,8 @@ router.put("/profile", async (req, res) => {
             .from("teacher_schedule")
             .insert(scheduleItems);
 
-          if (scheduleError) console.warn("Schedule save warning:", scheduleError);
+          if (scheduleError)
+            console.warn("Schedule save warning:", scheduleError);
         }
       }
 
@@ -167,10 +172,14 @@ router.put("/profile", async (req, res) => {
       });
     }
 
-    res.status(200).json({ success: true, message: "Profile updated successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Profile updated successfully" });
   } catch (error) {
     console.error("Update profile error:", error);
-    res.status(500).json({ error: error.message || "Failed to update profile" });
+    res
+      .status(500)
+      .json({ error: error.message || "Failed to update profile" });
   }
 });
 
@@ -202,7 +211,9 @@ router.put("/password", async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: "Current and new password required" });
+      return res
+        .status(400)
+        .json({ error: "Current and new password required" });
     }
 
     // Validate password strength
@@ -218,22 +229,49 @@ router.put("/password", async (req, res) => {
     // Get current user
     const { data: userRow, error: userError } = await supabaseAdmin
       .from("users")
-      .select("password_hash")
+      .select("email, password_hash")
       .eq("id", userId)
       .single();
 
     if (userError) throw userError;
 
-    // Verify current password
-    const isValidPassword = await bcrypt.compare(currentPassword, userRow.password_hash);
+    let isValidPassword = false;
+
+    if (userRow.password_hash) {
+      try {
+        isValidPassword = await bcrypt.compare(
+          currentPassword,
+          userRow.password_hash,
+        );
+      } catch (hashError) {
+        console.warn("Password hash comparison failed", hashError);
+      }
+    }
+
+    if (!isValidPassword && userRow.email) {
+      try {
+        const { data: authData, error: authError } =
+          await supabase.auth.signInWithPassword({
+            email: userRow.email,
+            password: currentPassword,
+          });
+        isValidPassword = !authError && !!authData?.user;
+      } catch (authCheckError) {
+        console.warn("Auth password verification failed", authCheckError);
+      }
+    }
+
     if (!isValidPassword) {
       return res.status(401).json({ error: "Current password is incorrect" });
     }
 
     // Update Supabase Auth password
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-      password: newPassword,
-    });
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      {
+        password: newPassword,
+      },
+    );
 
     if (authError) throw authError;
 
@@ -260,10 +298,14 @@ router.put("/password", async (req, res) => {
       recordId: userId,
     });
 
-    res.status(200).json({ success: true, message: "Password updated successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
   } catch (error) {
     console.error("Update password error:", error);
-    res.status(500).json({ error: error.message || "Failed to update password" });
+    res
+      .status(500)
+      .json({ error: error.message || "Failed to update password" });
   }
 });
 
@@ -305,7 +347,11 @@ router.get("/profile", async (req, res) => {
     let profile = { ...userRow };
 
     // Get role-specific profile data
-    if (userRow.role === "admin" || userRow.role === "teacher" || userRow.role === "faculty") {
+    if (
+      userRow.role === "admin" ||
+      userRow.role === "teacher" ||
+      userRow.role === "faculty"
+    ) {
       const { data: teacherRow, error: teacherError } = await supabaseAdmin
         .from("teachers")
         .select("*")
@@ -332,7 +378,7 @@ router.get("/profile", async (req, res) => {
           .eq("teacher_id", teacherRow.id);
 
         if (!scheduleError && scheduleData) {
-          profile.schedule = scheduleData.map(item => ({
+          profile.schedule = scheduleData.map((item) => ({
             code: item.subject_code,
             subject: item.subject_name,
             section: item.class_section,
@@ -359,11 +405,12 @@ router.get("/profile", async (req, res) => {
     }
 
     // Get notification preferences
-    const { data: notificationRow, error: notificationError } = await supabaseAdmin
-      .from("notification_preferences")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const { data: notificationRow, error: notificationError } =
+      await supabaseAdmin
+        .from("notification_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
 
     if (!notificationError && notificationRow) {
       profile.notificationPreferences = notificationRow;
@@ -409,7 +456,12 @@ router.put("/notifications", async (req, res) => {
     }
 
     const userId = sessionRow.user_id;
-    const { emailNotifications, gradeReminders, attendanceAlerts, systemUpdates } = req.body;
+    const {
+      emailNotifications,
+      gradeReminders,
+      attendanceAlerts,
+      systemUpdates,
+    } = req.body;
 
     // Check if notification preferences exist
     const { data: existingRow, error: checkError } = await supabaseAdmin
@@ -452,10 +504,16 @@ router.put("/notifications", async (req, res) => {
       newValues: preferences,
     });
 
-    res.status(200).json({ success: true, message: "Notification preferences updated" });
+    res
+      .status(200)
+      .json({ success: true, message: "Notification preferences updated" });
   } catch (error) {
     console.error("Update notifications error:", error);
-    res.status(500).json({ error: error.message || "Failed to update notification preferences" });
+    res
+      .status(500)
+      .json({
+        error: error.message || "Failed to update notification preferences",
+      });
   }
 });
 

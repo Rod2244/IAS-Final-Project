@@ -34,7 +34,7 @@ app.use(cookieParser(process.env.COOKIE_SECRET || "change-this-secret"));
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self';"
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; frame-ancestors 'self';",
   );
   next();
 });
@@ -54,7 +54,12 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "X-CSRF-Token", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "X-CSRF-Token",
+      "X-Session-Token",
+      "Authorization",
+    ],
     credentials: true,
   }),
 );
@@ -66,7 +71,9 @@ const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many authentication requests. Please try again later." },
+  message: {
+    error: "Too many authentication requests. Please try again later.",
+  },
   // Do not trust proxy for rate limiting; key by connection IP only
   skip: (req) => process.env.SKIP_RATE_LIMIT === "true",
   keyGenerator: (req) => req.socket.remoteAddress,
@@ -74,7 +81,7 @@ const authLimiter = rateLimit({
 app.use("/api/auth", authLimiter);
 
 // Apply CSRF protection globally - GET requests skip validation automatically
-app.use(csrfProtection); 
+app.use(csrfProtection);
 
 // Endpoint to get CSRF token - req.csrfToken() available after middleware
 app.get("/api/auth/csrf-token", (req, res) => {
@@ -91,8 +98,14 @@ app.get("/api/auth/csrf-token", (req, res) => {
 if (process.env.NODE_ENV === "production") {
   app.use((req, res, next) => {
     const forwardedProto = req.headers["x-forwarded-proto"] || "";
-    if (!req.secure && forwardedProto.toLowerCase() !== "https" && !req.hostname.includes("localhost")) {
-      return res.status(426).json({ error: "Please use HTTPS for all requests." });
+    if (
+      !req.secure &&
+      forwardedProto.toLowerCase() !== "https" &&
+      !req.hostname.includes("localhost")
+    ) {
+      return res
+        .status(426)
+        .json({ error: "Please use HTTPS for all requests." });
     }
     next();
   });

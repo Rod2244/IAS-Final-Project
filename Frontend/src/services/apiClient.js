@@ -87,9 +87,16 @@ apiClient.interceptors.request.use(async (config) => {
 // Add token to requests if available
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem("authToken");
+  const sessionToken = localStorage.getItem("sessionToken");
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (sessionToken) {
+    config.headers["X-Session-Token"] = sessionToken;
+  }
+
   return config;
 });
 

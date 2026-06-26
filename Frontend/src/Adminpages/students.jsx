@@ -11,6 +11,16 @@ import {
   UserRoundPen,
 } from "lucide-react";
 
+const fallbackGradeSubjects = [
+  "Filipino",
+  "GMRC",
+  "Language",
+  "Literature",
+  "Makabansa",
+  "Math",
+  "Reading",
+];
+
 const initialStudents = [
   {
     id: 1,
@@ -136,6 +146,21 @@ const getStoredStudentPasswords = () => {
   }
 };
 
+const getSectionOptions = (studentList = []) => {
+  const defaultOptions = [
+    "Class A",
+    "Class B",
+    "Class C",
+    "Class D",
+    "Class E",
+  ];
+  const existingOptions = studentList
+    .map((student) => student.class || student.section)
+    .filter(Boolean);
+
+  return [...new Set([...existingOptions, ...defaultOptions])];
+};
+
 const Students = () => {
   const [students, setStudents] = useState(initialStudents);
   const [showModal, setShowModal] = useState(false);
@@ -152,6 +177,9 @@ const Students = () => {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [studentPasswords, setStudentPasswords] = useState(
     getStoredStudentPasswords,
+  );
+  const [availableSubjectsForGrades, setAvailableSubjectsForGrades] = useState(
+    [],
   );
   // Filter and search states
   const [filterGrade, setFilterGrade] = useState("All Grades");
@@ -633,36 +661,71 @@ const Students = () => {
     setShowPassword(false);
   };
 
-  const openGradesModal = (student) => {
-    setEditingStudentForGrades(student);
-    setGradesData({
-      philippine_history: { q1: "", q2: "", q3: "", q4: "" },
-      filipino: { q1: "", q2: "", q3: "", q4: "" },
-      gmrc: { q1: "", q2: "", q3: "", q4: "" },
-      language: { q1: "", q2: "", q3: "", q4: "" },
-      literature: { q1: "", q2: "", q3: "", q4: "" },
-      makabansa: { q1: "", q2: "", q3: "", q4: "" },
-      math: { q1: "", q2: "", q3: "", q4: "" },
-      reading: { q1: "", q2: "", q3: "", q4: "" },
-      remarks: "",
+  const createSubjectGradeKey = (subjectName) =>
+    String(subjectName || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  const buildGradesDataFromSubjects = (subjects = []) => {
+    const nextData = { remarks: "" };
+    const subjectList = subjects.length
+      ? subjects
+      : fallbackGradeSubjects.map((name) => ({ name }));
+
+    subjectList.forEach((subject) => {
+      const subjectName = subject.name || subject.subject_name || "";
+      const key = createSubjectGradeKey(subjectName);
+      nextData[key] = { q1: "", q2: "", q3: "", q4: "" };
     });
+
+    return nextData;
+  };
+
+  const fetchSubjectsForGrades = async (gradeLevel) => {
+    try {
+      const response = await fetch("http://localhost:5000/api/subjects", {
+        credentials: "include",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load subjects");
+      }
+
+      const normalizedSubjects = (data || []).filter((subject) => {
+        const subjectGrade = subject.grade || subject.grade_level || "";
+        return !gradeLevel || subjectGrade === gradeLevel;
+      });
+
+      const subjectList = normalizedSubjects.length
+        ? normalizedSubjects
+        : fallbackGradeSubjects.map((name) => ({ name }));
+
+      setAvailableSubjectsForGrades(subjectList);
+      return subjectList;
+    } catch (error) {
+      console.error("Fetch subjects for grades error:", error);
+      setAvailableSubjectsForGrades(
+        fallbackGradeSubjects.map((name) => ({ name })),
+      );
+      return fallbackGradeSubjects.map((name) => ({ name }));
+    }
+  };
+
+  const openGradesModal = async (student) => {
+    setEditingStudentForGrades(student);
+    const gradeLevel = student.grade || "Grade 3";
+    const subjectList = await fetchSubjectsForGrades(gradeLevel);
+    setGradesData({ ...buildGradesDataFromSubjects(subjectList), remarks: "" });
     setShowGradesModal(true);
   };
 
   const closeGradesModal = () => {
     setShowGradesModal(false);
     setEditingStudentForGrades(null);
-    setGradesData({
-      philippine_history: { q1: "", q2: "", q3: "", q4: "" },
-      filipino: { q1: "", q2: "", q3: "", q4: "" },
-      gmrc: { q1: "", q2: "", q3: "", q4: "" },
-      language: { q1: "", q2: "", q3: "", q4: "" },
-      literature: { q1: "", q2: "", q3: "", q4: "" },
-      makabansa: { q1: "", q2: "", q3: "", q4: "" },
-      math: { q1: "", q2: "", q3: "", q4: "" },
-      reading: { q1: "", q2: "", q3: "", q4: "" },
-      remarks: "",
-    });
+    setAvailableSubjectsForGrades([]);
+    setGradesData({ remarks: "" });
   };
 
   const handleGradesChange = (event) => {
@@ -676,78 +739,67 @@ const Students = () => {
   const handleSaveGrades = async (event) => {
     event.preventDefault();
 
-    const subjectsToSave = [];
-    const subjectNames = [
-      "Filipino",
-      "GMRC",
-      "Language",
-      "Literature",
-      "Makabansa",
-      "Math",
-      "Reading",
-    ];
-    const subjectKeys = [
-      "filipino",
-      "gmrc",
-      "language",
-      "literature",
-      "makabansa",
-      "math",
-      "reading",
-    ];
-
-    for (let i = 0; i < subjectKeys.length; i++) {
-      const key = subjectKeys[i];
-      const grades = gradesData[key];
-
-      if (grades.q1 || grades.q2 || grades.q3 || grades.q4) {
-        if (!grades.q1 || !grades.q2 || !grades.q3 || !grades.q4) {
-          toast.error(`${subjectNames[i]}: All quarterly grades are required`);
-          return;
-        }
-
-        const q1 = parseFloat(grades.q1);
-        const q2 = parseFloat(grades.q2);
-        const q3 = parseFloat(grades.q3);
-        const q4 = parseFloat(grades.q4);
-
-        if (
-          isNaN(q1) ||
-          isNaN(q2) ||
-          isNaN(q3) ||
-          isNaN(q4) ||
-          q1 < 0 ||
-          q1 > 100 ||
-          q2 < 0 ||
-          q2 > 100 ||
-          q3 < 0 ||
-          q3 > 100 ||
-          q4 < 0 ||
-          q4 > 100
-        ) {
-          toast.error(`${subjectNames[i]}: Grades must be between 0-100`);
-          return;
-        }
-
-        const average = ((q1 + q2 + q3 + q4) / 4).toFixed(2);
-        subjectsToSave.push({
-          subjectName: subjectNames[i],
-          q1,
-          q2,
-          q3,
-          q4,
-          average,
-        });
-      }
-    }
-
-    if (subjectsToSave.length === 0) {
-      toast.error("Please enter grades for at least one subject");
-      return;
-    }
-
     try {
       const headers = await getCsrfHeaders();
+      const subjectRows = availableSubjectsForGrades.length
+        ? availableSubjectsForGrades
+        : fallbackGradeSubjects.map((name) => ({ name }));
+      const subjectsToSave = [];
+
+      for (const subject of subjectRows) {
+        const subjectName = subject.name || subject.subject_name || "";
+        const subjectKey = createSubjectGradeKey(subjectName);
+        const grades = gradesData[subjectKey] || {
+          q1: "",
+          q2: "",
+          q3: "",
+          q4: "",
+        };
+
+        if (grades.q1 || grades.q2 || grades.q3 || grades.q4) {
+          if (!grades.q1 || !grades.q2 || !grades.q3 || !grades.q4) {
+            toast.error(`${subjectName}: All quarterly grades are required`);
+            return;
+          }
+
+          const q1 = parseFloat(grades.q1);
+          const q2 = parseFloat(grades.q2);
+          const q3 = parseFloat(grades.q3);
+          const q4 = parseFloat(grades.q4);
+
+          if (
+            isNaN(q1) ||
+            isNaN(q2) ||
+            isNaN(q3) ||
+            isNaN(q4) ||
+            q1 < 0 ||
+            q1 > 100 ||
+            q2 < 0 ||
+            q2 > 100 ||
+            q3 < 0 ||
+            q3 > 100 ||
+            q4 < 0 ||
+            q4 > 100
+          ) {
+            toast.error(`${subjectName}: Grades must be between 0-100`);
+            return;
+          }
+
+          subjectsToSave.push({
+            subjectName,
+            q1,
+            q2,
+            q3,
+            q4,
+          });
+        }
+      }
+
+      if (subjectsToSave.length === 0) {
+        toast.error("Please enter grades for at least one subject");
+        return;
+      }
+
       for (const subject of subjectsToSave) {
         const response = await fetch("http://localhost:5000/api/grades", {
           method: "POST",
@@ -772,6 +824,7 @@ const Students = () => {
             q4_grade: subject.q4,
             school_year: "2026-2027",
             grading_period: "1st Semester",
+            remarks: gradesData.remarks || "",
           }),
         });
 
@@ -802,9 +855,7 @@ const Students = () => {
   const uniqueClasses = [
     "All Classes",
     ...new Set(
-      students
-        .map((s) => s.class || s.section || "Class A")
-        .filter(Boolean)
+      students.map((s) => s.class || s.section || "Class A").filter(Boolean),
     ),
   ];
 
@@ -824,6 +875,7 @@ const Students = () => {
     return matchGrade && matchClass && matchStatus && matchSearch;
   });
 
+  const sectionOptions = getSectionOptions(students);
   const totalStudents = students.length;
   const activeStudents = students.filter(
     (student) => student.status === "Active",
@@ -938,83 +990,79 @@ const Students = () => {
           <tbody>
             {filteredStudents.length > 0 ? (
               filteredStudents.map((student) => (
-              <tr key={student.id}>
-                <td>
-                  <div className="student-cell">
-                    <div className="student-avatar-small">
-                      {student.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
+                <tr key={student.id}>
+                  <td>
+                    <div className="student-cell">
+                      <div className="student-avatar-small">
+                        {student.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </div>
+                      <span className="student-name">{student.name}</span>
                     </div>
-                    <span className="student-name">{student.name}</span>
-                  </div>
-                </td>
-                <td>{student.lrn}</td>
-                <td>{student.grade}</td>
-                <td>
-                  <span
-                    className={`class-badge-small ${student.class === "Class A" ? "class-a" : "class-b"}`}
-                  >
-                    {student.class}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    className={`status-badge ${student.status === "Active" ? "active" : "inactive"}`}
-                  >
-                    {student.status}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button
-                      className="btn-icon"
-                      title="View"
-                      onClick={() => openViewModal(student)}
+                  </td>
+                  <td>{student.lrn}</td>
+                  <td>{student.grade}</td>
+                  <td>
+                    <span
+                      className={`class-badge-small ${student.class === "Class A" ? "class-a" : "class-b"}`}
                     >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      {student.class}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={`status-badge ${student.status === "Active" ? "active" : "inactive"}`}
+                    >
+                      {student.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                      <button
+                        className="btn-icon"
+                        title="View"
+                        onClick={() => openViewModal(student)}
                       >
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                      </svg>
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Edit Grades"
-                      onClick={() => openGradesModal(student)}
-                    >
-                      <Edit3Icon size={24} />
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Edit"
-                      onClick={() => openEditModal(student)}
-                    >
-                      <UserRoundPen size={24} />
-                    </button>
-                    <button
-                      className="btn-icon"
-                      title="Delete"
-                      onClick={() => handleDeleteStudent(student.id)}
-                    >
-                      <DeleteIcon size={24} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                          <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                      </button>
+                      <button
+                        className="btn-icon"
+                        title="Edit"
+                        onClick={() => openEditModal(student)}
+                      >
+                        <UserRoundPen size={24} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        title="Delete"
+                        onClick={() => handleDeleteStudent(student.id)}
+                      >
+                        <DeleteIcon size={24} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             ) : (
               <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: "20px" }}>
+                <td
+                  colSpan="6"
+                  style={{ textAlign: "center", padding: "20px" }}
+                >
                   No students found. Try adjusting your filters or search.
                 </td>
               </tr>
@@ -1123,6 +1171,21 @@ const Students = () => {
                   </div>
                 </div>
                 <div className="form-row">
+                  <div className="form-group">
+                    <label>Section *</label>
+                    <select
+                      name="class"
+                      value={formData.class}
+                      onChange={handleFormChange}
+                      required
+                    >
+                      {sectionOptions.map((section) => (
+                        <option key={section} value={section}>
+                          {section}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="form-group">
                     <label>Gender</label>
                     <select
@@ -1571,7 +1634,7 @@ const Students = () => {
             style={{ maxWidth: "900px", maxHeight: "85vh", overflowY: "auto" }}
           >
             <div className="modal-header">
-              <h2>Edit Grades - {editingStudentForGrades?.name}</h2>
+              <h2>Input Grades - {editingStudentForGrades?.name}</h2>
               <button className="modal-close" onClick={closeGradesModal}>
                 ✕
               </button>
@@ -1594,6 +1657,17 @@ const Students = () => {
                     {editingStudentForGrades?.lrn} |
                     <strong style={{ marginLeft: "0.5rem" }}>Class:</strong>{" "}
                     {editingStudentForGrades?.class}
+                  </p>
+                  <p
+                    style={{
+                      margin: "0.45rem 0 0",
+                      fontSize: "0.82rem",
+                      color: "#1565c0",
+                    }}
+                  >
+                    Subjects shown here are pulled from Manage Subjects for this
+                    grade level so grade entry stays aligned with subject
+                    assignment.
                   </p>
                 </div>
 
@@ -1670,18 +1744,13 @@ const Students = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {[
-                        "Filipino",
-                        "GMRC",
-                        "Language",
-                        "Literature",
-                        "Makabansa",
-                        "Math",
-                        "Reading",
-                      ].map((subject, idx) => {
-                        const subjectKey = subject
-                          .toLowerCase()
-                          .replace(/\s+/g, "_");
+                      {(availableSubjectsForGrades.length
+                        ? availableSubjectsForGrades
+                        : fallbackGradeSubjects.map((name) => ({ name }))
+                      ).map((subject, idx) => {
+                        const subjectName =
+                          subject.name || subject.subject_name || "";
+                        const subjectKey = createSubjectGradeKey(subjectName);
                         const grades = gradesData[subjectKey] || {
                           q1: "",
                           q2: "",
@@ -1703,7 +1772,7 @@ const Students = () => {
                             style={{ borderBottom: "1px solid #eee" }}
                           >
                             <td style={{ padding: "10px", fontWeight: "500" }}>
-                              {subject}
+                              {subjectName}
                             </td>
                             <td style={{ padding: "8px", textAlign: "center" }}>
                               <input
