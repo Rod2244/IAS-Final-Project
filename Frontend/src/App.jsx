@@ -14,7 +14,8 @@ import StudentLayout from "./StudentPages/StudentLayout";
 import "./App.css";
 
 // Protected Route Component
-const ProtectedRoute = ({ element, isAuthenticated }) => {
+const ProtectedRoute = ({ element }) => {
+  const isAuthenticated = !!localStorage.getItem("authToken");
   return isAuthenticated ? element : <Navigate to="/login" replace />;
 };
 
@@ -68,22 +69,7 @@ const renderPage = () => {
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    // Initialize state from localStorage immediately
-    return !!localStorage.getItem("authToken");
-  });
-
-  useEffect(() => {
-    // Listen for storage changes (when user logs in/out from another tab)
-    const handleStorageChange = (e) => {
-      if (e.key === "authToken") {
-        setIsAuthenticated(!!e.newValue);
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  const isAuthenticated = !!localStorage.getItem("authToken");
 
   return (
     <BrowserRouter>
@@ -103,12 +89,7 @@ function App() {
         />
         <Route
           path="/*"
-          element={
-            <ProtectedRoute
-              element={<LayoutWrapper />}
-              isAuthenticated={isAuthenticated}
-            />
-          }
+          element={<ProtectedRoute element={<LayoutWrapper />} />}
         />
         <Route path="/student" element={<StudentLayout />} />
       </Routes>

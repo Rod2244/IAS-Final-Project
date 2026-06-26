@@ -153,6 +153,11 @@ const Students = () => {
   const [studentPasswords, setStudentPasswords] = useState(
     getStoredStudentPasswords,
   );
+  // Filter and search states
+  const [filterGrade, setFilterGrade] = useState("All Grades");
+  const [filterClass, setFilterClass] = useState("All Classes");
+  const [filterStatus, setFilterStatus] = useState("All Status");
+  const [searchQuery, setSearchQuery] = useState("");
   const [gradesData, setGradesData] = useState({
     philippine_history: { q1: "", q2: "", q3: "", q4: "" },
     filipino: { q1: "", q2: "", q3: "", q4: "" },
@@ -788,6 +793,37 @@ const Students = () => {
     }
   };
 
+  // --- FILTER LOGIC ---
+  const uniqueGrades = [
+    "All Grades",
+    ...new Set(students.map((s) => s.grade || "Grade 3").filter(Boolean)),
+  ];
+
+  const uniqueClasses = [
+    "All Classes",
+    ...new Set(
+      students
+        .map((s) => s.class || s.section || "Class A")
+        .filter(Boolean)
+    ),
+  ];
+
+  // Apply filters and search
+  const filteredStudents = students.filter((student) => {
+    const matchGrade =
+      filterGrade === "All Grades" || student.grade === filterGrade;
+    const matchClass =
+      filterClass === "All Classes" || student.class === filterClass;
+    const matchStatus =
+      filterStatus === "All Status" || student.status === filterStatus;
+    const matchSearch =
+      searchQuery === "" ||
+      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.lrn.includes(searchQuery);
+
+    return matchGrade && matchClass && matchStatus && matchSearch;
+  });
+
   const totalStudents = students.length;
   const activeStudents = students.filter(
     (student) => student.status === "Active",
@@ -841,37 +877,34 @@ const Students = () => {
         <div className="filter-group">
           <label>Grade Level:</label>
           <select
-            name="grade"
-            value={formData.grade}
-            onChange={handleFormChange}
+            value={filterGrade}
+            onChange={(e) => setFilterGrade(e.target.value)}
           >
-            <option>All Grades</option>
-            <option>Grade 1</option>
-            <option>Grade 2</option>
-            <option>Grade 3</option>
-            <option>Grade 4</option>
-            <option>Grade 5</option>
-            <option>Grade 6</option>
+            {uniqueGrades.map((grade) => (
+              <option key={grade} value={grade}>
+                {grade}
+              </option>
+            ))}
           </select>
         </div>
         <div className="filter-group">
           <label>Class:</label>
           <select
-            name="class"
-            value={formData.class}
-            onChange={handleFormChange}
+            value={filterClass}
+            onChange={(e) => setFilterClass(e.target.value)}
           >
-            <option>All Classes</option>
-            <option>Class A</option>
-            <option>Class B</option>
+            {uniqueClasses.map((cls) => (
+              <option key={cls} value={cls}>
+                {cls}
+              </option>
+            ))}
           </select>
         </div>
         <div className="filter-group">
           <label>Status:</label>
           <select
-            name="status"
-            value={formData.status}
-            onChange={handleFormChange}
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option>All Status</option>
             <option>Active</option>
@@ -879,7 +912,12 @@ const Students = () => {
           </select>
         </div>
         <div className="search-box">
-          <input type="text" placeholder="Search student..." />
+          <input
+            type="text"
+            placeholder="Search student by name or LRN..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
           <span className="search-icon">🔍</span>
         </div>
       </div>
@@ -898,7 +936,8 @@ const Students = () => {
             </tr>
           </thead>
           <tbody>
-            {students.map((student) => (
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => (
               <tr key={student.id}>
                 <td>
                   <div className="student-cell">
@@ -972,7 +1011,14 @@ const Students = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+            ))
+            ) : (
+              <tr>
+                <td colSpan="6" style={{ textAlign: "center", padding: "20px" }}>
+                  No students found. Try adjusting your filters or search.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
